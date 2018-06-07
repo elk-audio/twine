@@ -84,7 +84,7 @@ set(EXTRA_CLION_SOURCES
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
-add_library(yarn SHARED ${SOURCE_FILES})
+add_library(twine SHARED ${SOURCE_FILES})
 if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)
 endif()
