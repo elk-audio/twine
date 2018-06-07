@@ -5,9 +5,8 @@ project(twine)
 #  Build configuration #
 ########################
 
-#set(WITH_APPS true CACHE BOOL "Build included applications")
-set(WITH_TESTS true CACHE BOOL "Build and run unittests")
-set(WITH_XENOMAI true CACHE BOOL "Build with xenomai realtime thread support")
+set(TWINE_WITH_TESTS true CACHE BOOL "Build and run unittests")
+set(TWINE_WITH_XENOMAI false CACHE BOOL "Build with xenomai realtime thread support")
 
 ####################
 #  Compiler Flags  #
@@ -68,10 +67,9 @@ endfunction()
 
 set(COMPILATION_UNITS
         src/twine.cpp
-        src/worker_pool.cpp
 )
 
-if (${WITH_XENOMAI})
+if (${TWINE_WITH_XENOMAI})
     set(COMPILATION_UNITS ${COMPILATION_UNITS}
             src/xenomai_worker_pool.cpp)
 endif()
@@ -87,7 +85,7 @@ set(EXTRA_CLION_SOURCES
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
 add_library(yarn SHARED ${SOURCE_FILES})
-if (${WITH_XENOMAI})
+if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)
 endif()
 
@@ -96,9 +94,6 @@ endif()
 #  Subdirectory projects                    #
 #############################################
 
-#if (${WITH_APPS})
-#    add_subdirectory(apps)
-#endif()
 #if (${WITH_TESTS})
 #    add_subdirectory(test)
 #endif()
