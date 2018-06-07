@@ -77,7 +77,7 @@ endif()
 # Enumerate all the headers separately so that CLion can index them
 set(EXTRA_CLION_SOURCES
         include/twine.h
-        include/worker_pool.h
+        src/twine_internal.h
         src/std_worker_pool.h
         src/xenomai_worker_pool.h
 )

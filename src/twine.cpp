@@ -1,5 +1,4 @@
 #include "twine.h"
-#include "worker_pool.h"
 #include "xenomai_worker_pool.h"
 #include "std_worker_pool.h"
 #include "flags.h"
@@ -10,7 +9,7 @@ thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
 static XenomaiRtFlag running_xenomai_realtime;
 
-bool current_thread_is_realtime()
+bool is_current_thread_realtime()
 {
     return ThreadRtFlag::is_realtime();
 }

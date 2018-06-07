@@ -1,7 +1,7 @@
 #ifndef TWINE_STD_WORKER_POOL_H
 #define TWINE_STD_WORKER_POOL_H
 
-#include "worker_pool.h"
+#include "twine.h"
 
 namespace twine
 {

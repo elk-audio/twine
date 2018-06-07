@@ -1,7 +1,7 @@
 #ifndef TWINE_XENOMAI_WORKER_POOL_H
 #define TWINE_XENOMAI_WORKER_POOL_H
 
-#include "worker_pool.h"
+#include "twine.h"
 
 namespace twine
 {
