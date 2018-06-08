@@ -16,11 +16,10 @@ class XenomaiWorkerPool;
 
 WorkerBarrier::WorkerBarrier()
 {
-    __cobalt_pthread_mutex_init(&mutex, NULL);
-    __cobalt_pthread_cond_init(&cond, NULL);
+    __cobalt_pthread_mutex_init(&mutex, nullptr);
+    __cobalt_pthread_cond_init(&cond, nullptr);
     n_threads_on_barrier = 0;
 }
-
 
 twine::WorkerThread::WorkerThread() : barriers(nullptr),
                                       aux_thread(0),

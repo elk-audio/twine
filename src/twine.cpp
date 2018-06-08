@@ -1,7 +1,7 @@
 #include "twine.h"
+#include "twine_internal.h"
 #include "xenomai_worker_pool.h"
 #include "std_worker_pool.h"
-#include "flags.h"
 
 namespace twine {
 
