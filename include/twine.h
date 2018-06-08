@@ -6,7 +6,7 @@
 namespace twine {
 
 /**
- * @brief Function to check whether in a realtime audio processing thread or not
+ * @brief Function to determine the realtime processing state of the current thread
  * @return true if called from a realtime audio processing thread, false other
  */
 bool is_current_thread_realtime();
