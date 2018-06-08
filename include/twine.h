@@ -24,14 +24,14 @@ public:
 
     virtual ~WorkerPool() = default;
 
-    virtual int add_worker(WorkerCallback worker_cb, void* worker_data);
+    virtual int add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
 
-    virtual void wait_for_workers_idle();
+    virtual void wait_for_workers_idle() = 0;
 
-    virtual void raspa_wakeup_workers();
+    virtual void raspa_wakeup_workers() = 0;
 
 protected:
-    WorkerPool();
+    WorkerPool() = default;
 };
 
 

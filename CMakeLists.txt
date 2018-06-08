@@ -91,6 +91,6 @@ endif()
 #  Subdirectory projects                    #
 #############################################
 
-#if (${WITH_TESTS})
-#    add_subdirectory(test)
-#endif()
+if (${WITH_TESTS})
+    add_subdirectory(test)
+endif()

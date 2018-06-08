@@ -8,33 +8,35 @@
 #pragma GCC diagnostic pop
 
 #include "twine.h"
+#include "twine_internal.h"
 #include "xenomai_worker_pool.h"
 
 namespace twine {
 
 class XenomaiWorkerPool;
 
-WorkerBarrier::WorkerBarrier()
+XenomaiWorkerBarrier::XenomaiWorkerBarrier()
 {
     __cobalt_pthread_mutex_init(&mutex, nullptr);
     __cobalt_pthread_cond_init(&cond, nullptr);
     n_threads_on_barrier = 0;
 }
 
-twine::WorkerThread::WorkerThread() : barriers(nullptr),
-                                      aux_thread(0),
-                                      callback(nullptr),
-                                      callback_data(nullptr),
-                                      thread_id(-1)
+XenomaiWorkerThread::XenomaiWorkerThread() : barriers(nullptr),
+                                             aux_thread(0),
+                                             callback(nullptr),
+                                             callback_data(nullptr),
+                                             thread_id(-1)
 {}
 
 void* _internal_worker_function(void* data)
 {
-    WorkerThread* worker_data = (WorkerThread*) data;
+    ThreadRtFlag rt_flag;
+
+    XenomaiWorkerThread* worker_data = (XenomaiWorkerThread*) data;
     WorkerCallback user_callback = worker_data->callback;
     void* user_data = worker_data->callback_data;
-    Barriers* barriers = worker_data->barriers;
-    // TODO - instantiate an rt flag here
+    XenomaiBarriers* barriers = worker_data->barriers;
 
     // TODO: replace 1 with a condition that can be signaled by main thread
     while (1)
@@ -78,7 +80,7 @@ void* _internal_worker_function(void* data)
     return NULL;
 }
 
-static int _initialize_worker_thread(WorkerThread* wthread)
+static int _initialize_worker_thread(XenomaiWorkerThread* wthread)
 {
     // TODO: pass prio as argument
     struct sched_param rt_params = { .sched_priority = 75 };
@@ -112,7 +114,7 @@ int XenomaiWorkerPool::add_worker(WorkerCallback worker_cb, void*worker_data)
     int thread_id = _n_workers;
     assert(thread_id < MAX_WORKERS_PER_POOL);
 
-    WorkerThread* wthread = &_worker_threads[thread_id];
+    XenomaiWorkerThread* wthread = &_worker_threads[thread_id];
 
     wthread->barriers = &_barriers;
     wthread->thread_id = thread_id;
@@ -187,7 +189,8 @@ void XenomaiWorkerPool::raspa_wakeup_workers()
 
 /* Dummy implementation for when building without xenomai support */
 namespace twine {
-WorkerBarrier::WorkerBarrier() {}
+XenomaiWorkerBarrier::XenomaiWorkerBarrier() {}
+XenomaiWorkerThread::XenomaiWorkerThread() {}
 XenomaiWorkerPool::XenomaiWorkerPool() {assert(false);}
 XenomaiWorkerPool::~XenomaiWorkerPool() {}
 

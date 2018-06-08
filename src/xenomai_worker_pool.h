@@ -2,35 +2,33 @@
 #define TWINE_XENOMAI_WORKER_POOL_H
 
 #include "twine.h"
+#include "worker_pool_common.h"
 
 namespace twine {
 
-constexpr int MAX_WORKERS_PER_POOL = 8;
-constexpr int N_CPU_CORES = 4;
-
-class WorkerBarrier
+class XenomaiWorkerBarrier
 {
 public:
-    WorkerBarrier();
+    XenomaiWorkerBarrier();
 
     pthread_mutex_t mutex;
     pthread_cond_t cond;
     int n_threads_on_barrier;
 };
 
-struct Barriers
+struct XenomaiBarriers
 {
-    WorkerBarrier currently_idle;
-    WorkerBarrier work_ready;
-    WorkerBarrier currently_working;
-    WorkerBarrier can_finish;
+    XenomaiWorkerBarrier currently_idle;
+    XenomaiWorkerBarrier work_ready;
+    XenomaiWorkerBarrier currently_working;
+    XenomaiWorkerBarrier can_finish;
 };
 
-class WorkerThread
+class XenomaiWorkerThread
 {
 public:
-    WorkerThread();
-    Barriers* barriers;
+    XenomaiWorkerThread();
+    XenomaiBarriers* barriers;
     pthread_t aux_thread;
     WorkerCallback callback;
     void* callback_data;
@@ -51,9 +49,9 @@ public:
 
 
 private:
-    Barriers     _barriers;
-    WorkerThread _worker_threads[MAX_WORKERS_PER_POOL];
-    int          _n_workers{0};
+    XenomaiBarriers     _barriers;
+    XenomaiWorkerThread _worker_threads[MAX_WORKERS_PER_POOL];
+    int                 _n_workers{0};
 };
 
 }// namespace twine
