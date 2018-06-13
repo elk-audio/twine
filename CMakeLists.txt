@@ -69,6 +69,7 @@ endfunction()
 set(COMPILATION_UNITS
         src/twine.cpp
         src/xenomai_worker_pool.cpp
+        src/std_worker_pool.cpp
 )
 
 # Enumerate all the headers separately so that CLion can index them

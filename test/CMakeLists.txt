@@ -15,6 +15,7 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 SET(TEST_FILES unittests/twine_tests.cpp
+               unittests/std_worker_pool_tests.cpp
                ../src/xenomai_worker_pool.cpp)
 
 set(INCLUDE_DIRS "${INCLUDE_DIRS}"
