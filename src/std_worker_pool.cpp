@@ -5,6 +5,7 @@
 #include <cassert>
 
 #include "std_worker_pool.h"
+#include "twine_internal.h"
 
 namespace twine {
 
@@ -18,7 +19,7 @@ BarrierWithTrigger::~BarrierWithTrigger()
 void BarrierWithTrigger::wait()
 {
     std::unique_lock lock(_thread_mutex);
-    const bool& halt_flag = *_halt_flag;
+    const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
     _no_threads_currently_on_barrier++;
 
     if (_no_threads_currently_on_barrier == _no_threads)
@@ -36,13 +37,15 @@ void BarrierWithTrigger::wait()
 void BarrierWithTrigger::wait_for_all()
 {
     std::unique_lock<std::mutex> lock(_calling_mutex);
-    if (_no_threads_currently_on_barrier == _no_threads)
+    int current_threads = _no_threads_currently_on_barrier.load();
+    if (current_threads == _no_threads)
     {
         return;
     }
-    while (_no_threads_currently_on_barrier < _no_threads)
+    while (current_threads < _no_threads)
     {
         _calling_cond.wait(lock);
+        current_threads = _no_threads_currently_on_barrier.load();
     }
 }
 
@@ -86,37 +89,95 @@ void BarrierWithTrigger::_swap_halt_flags()
 StdWorkerThread::StdWorkerThread(BarrierWithTrigger& barrier,
                                  WorkerCallback callback,
                                  void* callback_data,
-                                 std::atomic_bool& running_flag) : _barrier(barrier),
-                                                                   _callback(callback),
-                                                                   _callback_data(callback_data),
-                                                                   _running(running_flag)
+                                 std::atomic_bool& running_flag,
+                                 int cpu_id ) : _barrier(barrier),
+                                                _callback(callback),
+                                                _callback_data(callback_data),
+                                                _running(running_flag)
 {
-    // TODO-start thread, set affinity etc
+    // std::thread does not support setting affinity and priority so we
+    // are forced to use a pthread here
+
+    struct sched_param rt_params = { .sched_priority = 75 };
+    pthread_attr_t task_attributes;
+    pthread_attr_init(&task_attributes);
+
+    pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&task_attributes, &rt_params);
+    cpu_set_t cpus;
+    CPU_ZERO(&cpus);
+    CPU_SET(cpu_id, &cpus);
+    pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+
+    // TODO: better error checking and propagation
+    int res = pthread_create(&_thread_handle, &task_attributes, &_worker_function, this);
+    assert(res == 0);
 }
 
 
 StdWorkerThread::~StdWorkerThread()
-{}
-
-void StdWorkerThread::worker()
 {
+    if (_thread_handle != 0)
+    {
+        pthread_join(_thread_handle, nullptr);
+    }
+}
 
+void* StdWorkerThread::_worker_function(void* data)
+{
+    reinterpret_cast<StdWorkerThread*>(data)->_internal_worker_function();
+    return nullptr;
+}
+
+void StdWorkerThread::_internal_worker_function()
+{
+    // this is a realtime thread
+    ThreadRtFlag rt_flag;
+    while(true)
+    {
+        _barrier.wait();
+        if (_running.load() == false)
+        {
+            // condition checked when coming out of wait as we might want to exit immediately here
+            break;
+        }
+        _callback(_callback_data);
+    }
+}
+
+StdWorkerPool::~StdWorkerPool()
+{
+    // wait for all workers to arrive at the barrier, then tell them to stop,
+    // they should exit as soon as they are woken up by he scheduler.
+    _barrier.wait_for_all();
+    _running.store(false);
+    _barrier.relase_all();
 }
 
 int StdWorkerPool::add_worker(WorkerCallback worker_cb, void* worker_data)
 {
-    return 0;
+    _barrier.set_no_threads(_no_workers + 1);
+    // round-robin assignment to cpu cores
+    int core = _no_workers % _no_cores;
+    _workers.push_back(std::make_unique<StdWorkerThread>(_barrier, worker_cb, worker_data, _running, core));
+    _no_workers++;
+    // Wait until the thread is idle to avoid synchronisation issues
+    _barrier.wait_for_all();
 }
 
 void StdWorkerPool::wait_for_workers_idle()
 {
-
+    _barrier.wait_for_all();
 }
 
-void StdWorkerPool::raspa_wakeup_workers()
+void StdWorkerPool::wakeup_workers()
 {
-
+    _barrier.relase_all();
+    _barrier.wait_for_all();
 }
+
 }// namespace twine
 
 #endif // TWINE_XENOMAI_WORKER_POOL_H

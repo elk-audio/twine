@@ -6,15 +6,15 @@
 #include <atomic>
 #include <thread>
 #include <array>
+#include <vector>
 
 #include "twine.h"
 #include "worker_pool_common.h"
+#include "twine_internal.h"
 
 namespace twine
 {
 typedef void (*WorkerCallback)(void* data);
-
-constexpr int MAX_NO_THREADS_ON_BARRIER = 8;
 
 /**
  * @brief Thread barrier that can be controlled from an external thread
@@ -76,37 +76,44 @@ private:
 class StdWorkerThread
 {
 public:
+    TWINE_DECLARE_NON_COPYABLE(StdWorkerThread);
+
     StdWorkerThread(BarrierWithTrigger& barrier, WorkerCallback callback,
-                    void* callback_data, std::atomic_bool& running_flag);
+                    void* callback_data, std::atomic_bool& running_flag, int id);
     ~StdWorkerThread();
 
+    static void* _worker_function(void* data);
+
 private:
-    void worker();
+    void _internal_worker_function();
 
     BarrierWithTrigger& _barrier;
-    std::thread _thread;
+    unsigned long int _thread_handle{0};
     WorkerCallback _callback;
     void* _callback_data;
-    int  _thread_id;
     const std::atomic_bool& _running;
 };
 
 class StdWorkerPool : public WorkerPool
 {
 public:
-    StdWorkerPool() = default;
-    ~StdWorkerPool() = default;
+    TWINE_DECLARE_NON_COPYABLE(StdWorkerPool);
+
+    StdWorkerPool(int cores) : _no_cores(cores) {}
+    ~StdWorkerPool();
 
     int add_worker(WorkerCallback worker_cb, void* worker_data) override;
 
     void wait_for_workers_idle() override;
 
-    void raspa_wakeup_workers() override;
+    void wakeup_workers() override;
 
 private:
-
+    std::atomic_bool _running{true};
     int _no_workers{0};
-
+    int _no_cores;
+    BarrierWithTrigger _barrier;
+    std::vector<std::unique_ptr<StdWorkerThread>> _workers;
 };
 
 }// namespace twine

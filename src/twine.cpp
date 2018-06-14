@@ -19,13 +19,13 @@ void init_xenomai()
     running_xenomai_realtime.set(true);
 }
 
-std::unique_ptr<WorkerPool> WorkerPool::CreateWorkerPool()
+std::unique_ptr<WorkerPool> WorkerPool::CreateWorkerPool(int cores)
 {
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<XenomaiWorkerPool>();
+        return std::make_unique<XenomaiWorkerPool>(cores);
     }
-    return std::make_unique<StdWorkerPool>();
+    return std::make_unique<StdWorkerPool>(cores);
 }
 
 } // twine

@@ -49,5 +49,8 @@ private:
     static bool _enabled;
 };
 
+#define TWINE_DECLARE_NON_COPYABLE(type) type(const type& other) = delete; \
+                                        type& operator=(const type&) = delete;
+
 } // namespace twine
 #endif //TWINE_TWINE_INTERNAL_H

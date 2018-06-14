@@ -48,3 +48,37 @@ TEST (BarrierTest, TestBarrierWithTrigger)
     t1.join();
     t2.join();
 }
+
+// A more complex test case where tests can be grouped
+// And setup and teardown functions added.
+class StdWorkerPoolTest : public ::testing::Test
+{
+protected:
+    StdWorkerPoolTest() {}
+
+    StdWorkerPool _module_under_test{2};
+    bool a{false};
+    bool b{false};
+};
+
+void worker_function(void* data)
+{
+    bool* flag = reinterpret_cast<bool*>(data);
+    *flag = true;
+}
+
+
+TEST_F(StdWorkerPoolTest, FunctionalityTest)
+{
+    _module_under_test.add_worker(worker_function, &a);
+    _module_under_test.add_worker(worker_function, &b);
+
+    _module_under_test.wait_for_workers_idle();
+    ASSERT_FALSE(a);
+    ASSERT_FALSE(b);
+
+    _module_under_test.wakeup_workers();
+
+    ASSERT_TRUE(a);
+    ASSERT_TRUE(b);
+}

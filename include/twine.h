@@ -18,9 +18,11 @@ class WorkerPool
 public:
     /**
      * @brief Construct a WorkerPool object.
+     * @param cores The maximum number of cores to use, must not be higher
+     *              than the number of cores on the machine.
      * @return
      */
-    static std::unique_ptr<WorkerPool> CreateWorkerPool();
+    static std::unique_ptr<WorkerPool> CreateWorkerPool(int cores);
 
     virtual ~WorkerPool() = default;
 
@@ -28,7 +30,7 @@ public:
 
     virtual void wait_for_workers_idle() = 0;
 
-    virtual void raspa_wakeup_workers() = 0;
+    virtual void wakeup_workers() = 0;
 
 protected:
     WorkerPool() = default;

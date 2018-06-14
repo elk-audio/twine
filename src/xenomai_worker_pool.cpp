@@ -103,7 +103,7 @@ static int _initialize_worker_thread(XenomaiWorkerThread* wthread)
     return res;
 }
 
-XenomaiWorkerPool::XenomaiWorkerPool()
+XenomaiWorkerPool::XenomaiWorkerPool(int cores) : _n_cores(cores)
 {}
 
 XenomaiWorkerPool::~XenomaiWorkerPool()
@@ -146,7 +146,7 @@ void XenomaiWorkerPool::wait_for_workers_idle()
     _barriers.currently_working.n_threads_on_barrier = _n_workers;
 }
 
-void XenomaiWorkerPool::raspa_wakeup_workers()
+void XenomaiWorkerPool::wakeup_workers()
 {
     // TODO: polish the code using a better barrier abstraction instead than repeated calls
     // The basic structure was adapted from:
@@ -191,12 +191,12 @@ void XenomaiWorkerPool::raspa_wakeup_workers()
 namespace twine {
 XenomaiWorkerBarrier::XenomaiWorkerBarrier() {}
 XenomaiWorkerThread::XenomaiWorkerThread() {}
-XenomaiWorkerPool::XenomaiWorkerPool() {assert(false);}
+XenomaiWorkerPool::XenomaiWorkerPool(int /*cores*/) {assert(false);}
 XenomaiWorkerPool::~XenomaiWorkerPool() {}
 
 int XenomaiWorkerPool::add_worker(WorkerCallback /*worker_cb*/, void* /*worker_data**/) {}
 void XenomaiWorkerPool::wait_for_workers_idle(){}
-void XenomaiWorkerPool::raspa_wakeup_workers() {}
+void XenomaiWorkerPool::wakeup_workers() {}
 }
 
 #endif
