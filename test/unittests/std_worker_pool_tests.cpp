@@ -34,7 +34,7 @@ TEST (BarrierTest, TestBarrierWithTrigger)
     ASSERT_FALSE(b);
 
     /* Run both threads and wait for them to stop at the barrier again */
-    module_under_test.relase_all();
+    module_under_test.release_all();
 
     module_under_test.wait_for_all();
 
@@ -43,7 +43,7 @@ TEST (BarrierTest, TestBarrierWithTrigger)
     ASSERT_TRUE(b);
 
     running = false;
-    module_under_test.relase_all();
+    module_under_test.release_all();
 
     t1.join();
     t2.join();

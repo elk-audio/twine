@@ -55,7 +55,7 @@ public:
     /**
      * @brief Release all threads waiting on the barrier.
      */
-    void relase_all();
+    void release_all();
 
 
 private:
@@ -69,8 +69,8 @@ private:
 
     std::array<bool, 2> _halt_flags{true,true};
     bool*           _halt_flag{&_halt_flags[0]};
-    std::atomic_int _no_threads_currently_on_barrier{0};
-    std::atomic_int _no_threads{0};
+    int _no_threads_currently_on_barrier{0};
+    int _no_threads{0};
 };
 
 class StdWorkerThread

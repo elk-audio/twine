@@ -18,18 +18,24 @@ BarrierWithTrigger::~BarrierWithTrigger()
 
 void BarrierWithTrigger::wait()
 {
-    std::unique_lock lock(_thread_mutex);
     const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
+    std::unique_lock calling_lock(_calling_mutex);
     _no_threads_currently_on_barrier++;
+    bool notify = _no_threads_currently_on_barrier == _no_threads;
 
-    if (_no_threads_currently_on_barrier == _no_threads)
+    // We release calling_lock before signaling to the control thread as the control
+    // thread will immediately want to lock this mutex when waking up
+    calling_lock.unlock();
+    if (notify)
     {
-        /* Last thread to finish notifies any waiting thread */
-        std::unique_lock<std::mutex> notifying_lock(_calling_mutex);
         _calling_cond.notify_one();
     }
+
+    std::unique_lock lock(_thread_mutex);
     while (halt_flag)
     {
+        // Threads may be woken up spuriously, therefore the condition
+        // needs to be rechecked when waking up
         _thread_cond.wait(lock);
     }
 }
@@ -37,7 +43,7 @@ void BarrierWithTrigger::wait()
 void BarrierWithTrigger::wait_for_all()
 {
     std::unique_lock<std::mutex> lock(_calling_mutex);
-    int current_threads = _no_threads_currently_on_barrier.load();
+    int current_threads = _no_threads_currently_on_barrier;
     if (current_threads == _no_threads)
     {
         return;
@@ -45,16 +51,16 @@ void BarrierWithTrigger::wait_for_all()
     while (current_threads < _no_threads)
     {
         _calling_cond.wait(lock);
-        current_threads = _no_threads_currently_on_barrier.load();
+        current_threads = _no_threads_currently_on_barrier;
     }
 }
 
 void BarrierWithTrigger::set_no_threads(int threads)
 {
-    _no_threads.store(threads);
+    _no_threads = threads;
 }
 
-void BarrierWithTrigger::relase_all()
+void BarrierWithTrigger::release_all()
 {
     assert(_no_threads_currently_on_barrier == _no_threads);
     std::unique_lock lock(_thread_mutex);
@@ -149,11 +155,9 @@ void StdWorkerThread::_internal_worker_function()
 
 StdWorkerPool::~StdWorkerPool()
 {
-    // wait for all workers to arrive at the barrier, then tell them to stop,
-    // they should exit as soon as they are woken up by he scheduler.
     _barrier.wait_for_all();
     _running.store(false);
-    _barrier.relase_all();
+    _barrier.release_all();
 }
 
 int StdWorkerPool::add_worker(WorkerCallback worker_cb, void* worker_data)
@@ -174,7 +178,7 @@ void StdWorkerPool::wait_for_workers_idle()
 
 void StdWorkerPool::wakeup_workers()
 {
-    _barrier.relase_all();
+    _barrier.release_all();
     _barrier.wait_for_all();
 }
 
