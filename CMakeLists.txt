@@ -19,7 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PROJECT_CXX_FLAGS "-Wall -Wextra")
 
 # Build optimization flags - these are the same for all targets
-set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 -m64 -march=corei7 -mtune=corei7 -mfpmath=sse -msse4.2")
+set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 ")
 set(CMAKE_CXX_FLAGS_DEBUG   "-DDEBUG -O0 -g")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PROJECT_CXX_FLAGS}")
@@ -31,8 +31,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PROJECT_CXX_FLAGS}")
 set(INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/include
 )
-
-include_directories(${INCLUDE_DIRS})
 
 #######################
 #  Utility functions  #
@@ -81,6 +79,8 @@ set(EXTRA_CLION_SOURCES
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
 add_library(twine SHARED ${SOURCE_FILES})
+target_include_directories(twine PRIVATE ${INCLUDE_DIRS})
+
 if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)
 endif()

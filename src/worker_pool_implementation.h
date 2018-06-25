@@ -163,8 +163,7 @@ public:
         CPU_SET(cpu_id, &cpus);
         pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
 
-        int res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
-        assert(res == 0);
+        thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
     }
 
     ~WorkerThread()
@@ -228,6 +227,7 @@ public:
         // Wait until the thread is idle to avoid synchronisation issues
 
         _barrier.wait_for_all();
+        return _no_workers;
     }
 
     void wait_for_workers_idle() override

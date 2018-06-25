@@ -11,24 +11,14 @@
 #pragma GCC diagnostic pop
 #endif
 #ifndef TWINE_BUILD_WITH_XENOMAI
-#define __cobalt_pthread_mutex_init(...)        0
-#define __cobalt_pthread_mutex_destroy(...)     0
-#define __cobalt_pthread_mutex_lock(...)        0
-#define __cobalt_pthread_mutex_unlock(...)      0
-#define __cobalt_pthread_cond_init(...)         0
-#define __cobalt_pthread_cond_destroy(...)      0
-#define __cobalt_pthread_cond_wait(...)         0
-#define __cobalt_pthread_cond_signal(...)       0
-#define __cobalt_pthread_cond_broadcast(...)    0
-#define __cobalt_pthread_create(...)            0
-#define __cobalt_pthread_join(...)              0
+#include "xenomai_stubs.h"
 #endif
 
 #include "twine.h"
 
 namespace twine {
 
-enum ThreadType : uint32_t
+enum class ThreadType : uint32_t
 {
     PTHREAD,
     XENOMAI
@@ -39,11 +29,11 @@ enum ThreadType : uint32_t
 template<ThreadType type>
 inline int mutex_create(pthread_mutex_t*mutex, const pthread_mutexattr_t* attributes)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_mutex_init(mutex, attributes);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_mutex_init(mutex, attributes);
     }
@@ -52,11 +42,11 @@ inline int mutex_create(pthread_mutex_t*mutex, const pthread_mutexattr_t* attrib
 template<ThreadType type>
 inline int mutex_destroy(pthread_mutex_t*mutex)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_mutex_destroy(mutex);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_mutex_destroy(mutex);
     }
@@ -65,11 +55,11 @@ inline int mutex_destroy(pthread_mutex_t*mutex)
 template<ThreadType type>
 inline int mutex_lock(pthread_mutex_t* mutex)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_mutex_lock(mutex);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_mutex_lock(mutex);
     }
@@ -78,11 +68,11 @@ inline int mutex_lock(pthread_mutex_t* mutex)
 template<ThreadType type>
 inline int mutex_unlock(pthread_mutex_t* mutex)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_mutex_unlock(mutex);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_mutex_unlock(mutex);
     }
@@ -91,11 +81,11 @@ inline int mutex_unlock(pthread_mutex_t* mutex)
 template<ThreadType type>
 inline int condition_var_create(pthread_cond_t* condition_var, const pthread_condattr_t* attributes)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_cond_init(condition_var, attributes);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_cond_init(condition_var, attributes);
     }
@@ -104,11 +94,11 @@ inline int condition_var_create(pthread_cond_t* condition_var, const pthread_con
 template<ThreadType type>
 inline int condition_var_destroy(pthread_cond_t* condition_var)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_cond_destroy(condition_var);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_cond_destroy(condition_var);
     }
@@ -117,11 +107,11 @@ inline int condition_var_destroy(pthread_cond_t* condition_var)
 template<ThreadType type>
 inline int condition_wait(pthread_cond_t*condition_var, pthread_mutex_t* mutex)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_cond_wait(condition_var, mutex);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_cond_wait(condition_var, mutex);
     }
@@ -130,11 +120,11 @@ inline int condition_wait(pthread_cond_t*condition_var, pthread_mutex_t* mutex)
 template<ThreadType type>
 inline int condition_signal(pthread_cond_t* condition_var)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_cond_signal(condition_var);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_cond_signal(condition_var);
     }
@@ -143,11 +133,11 @@ inline int condition_signal(pthread_cond_t* condition_var)
 template<ThreadType type>
 inline int condition_broadcast(pthread_cond_t* condition_var)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_cond_broadcast(condition_var);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_cond_broadcast(condition_var);
     }
@@ -156,11 +146,11 @@ inline int condition_broadcast(pthread_cond_t* condition_var)
 template<ThreadType type>
 inline int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_create(thread, attributes, entry_fun, argument);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_create(thread, attributes, entry_fun, argument);
     }
@@ -169,11 +159,11 @@ inline int thread_create(pthread_t* thread, const pthread_attr_t* attributes, vo
 template<ThreadType type>
 inline int thread_join(pthread_t thread, void** return_var = nullptr)
 {
-    if constexpr (type == PTHREAD)
+    if constexpr (type == ThreadType::PTHREAD)
     {
         return pthread_join(thread, return_var);
     }
-    else if constexpr (type == XENOMAI)
+    else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_join(thread, return_var);
     }
