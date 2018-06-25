@@ -16,13 +16,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Global flags
-set(PROJECT_C_FLAGS "-Wall -Wextra")
+set(PROJECT_CXX_FLAGS "-Wall -Wextra")
 
 # Build optimization flags - these are the same for all targets
-set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O3 -m64 -march=corei7 -mtune=corei7 -mfpmath=sse -msse4.2")
-set(CMAKE_C_FLAGS_DEBUG   "-DDEBUG -O0 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 -m64 -march=corei7 -mtune=corei7 -mfpmath=sse -msse4.2")
+set(CMAKE_CXX_FLAGS_DEBUG   "-DDEBUG -O0 -g")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PROJECT_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PROJECT_CXX_FLAGS}")
 
 #########################
 #  Include Directories  #
@@ -68,16 +68,14 @@ endfunction()
 
 set(COMPILATION_UNITS
         src/twine.cpp
-        src/xenomai_worker_pool.cpp
-        src/std_worker_pool.cpp
 )
 
 # Enumerate all the headers separately so that CLion can index them
 set(EXTRA_CLION_SOURCES
         include/twine.h
         src/twine_internal.h
-        src/std_worker_pool.h
-        src/xenomai_worker_pool.h
+        src/worker_pool_implementation.h
+        src/thread_helpers.h
 )
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")

@@ -1,7 +1,6 @@
 #include "twine.h"
 #include "twine_internal.h"
-#include "xenomai_worker_pool.h"
-#include "std_worker_pool.h"
+#include "worker_pool_implementation.h"
 
 namespace twine {
 
@@ -23,9 +22,9 @@ std::unique_ptr<WorkerPool> WorkerPool::CreateWorkerPool(int cores)
 {
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<XenomaiWorkerPool>(cores);
+        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores);
     }
-    return std::make_unique<StdWorkerPool>(cores);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores);
 }
 
 } // twine

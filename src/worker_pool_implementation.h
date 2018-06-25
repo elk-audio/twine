@@ -1,0 +1,254 @@
+#ifndef TWINE_WORKER_POOL_IMPLEMENTATION_H
+#define TWINE_WORKER_POOL_IMPLEMENTATION_H
+
+#include <cassert>
+#include <atomic>
+#include <vector>
+
+#include "thread_helpers.h"
+#include "twine_internal.h"
+
+namespace twine {
+
+/**
+ * @brief Thread barrier that can be controlled from an external thread
+ */
+template <ThreadType type>
+class BarrierWithTrigger
+{
+public:
+    /**
+     * @brief Multithread barrier with trigger functionality
+     * @param threads The default number of threads to handle
+     */
+    BarrierWithTrigger()
+    {
+        mutex_create<type>(&_thread_mutex, nullptr);
+        mutex_create<type>(&_calling_mutex, nullptr);
+        condition_var_create<type>(&_thread_cond, nullptr);
+        condition_var_create<type>(&_calling_cond, nullptr);
+    }
+
+    /**
+     * @brief Destroy the barrier object
+     */
+    ~BarrierWithTrigger()
+    {
+        mutex_destroy<type>(&_thread_mutex);
+        mutex_destroy<type>(&_calling_mutex);
+        condition_var_destroy<type>(&_thread_cond);
+        condition_var_destroy<type>(&_calling_cond);
+    }
+
+    /**
+     * @brief Wait for signal to finish, called from threads participating on the
+     *        barrier
+     */
+    void wait()
+    {
+        const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
+        mutex_lock<type>(&_calling_mutex);
+        _no_threads_currently_on_barrier++;
+        bool notify = _no_threads_currently_on_barrier == _no_threads;
+        mutex_unlock<type>(&_calling_mutex);
+
+        if (notify)
+        {
+            condition_signal<type>(&_calling_cond);
+        }
+
+        mutex_lock<type>(&_thread_mutex);
+        while (halt_flag)
+        {
+            // The condition needs to be rechecked when waking as threads may wake up spuriously
+            condition_wait<type>(&_thread_cond, &_thread_mutex);
+        }
+        mutex_unlock<type>(&_thread_mutex);
+    }
+
+    /**
+     * @brief Wait for all threads to halt on the barrier, called from a thread
+     *        not waiting on the barrier and will block until all threads are
+     *        waiting on the barrier.
+     */
+    void wait_for_all()
+    {
+        mutex_lock<type>(&_calling_mutex);
+        int current_threads = _no_threads_currently_on_barrier;
+        if (current_threads == _no_threads)
+        {
+            mutex_unlock<type>(&_calling_mutex);
+            return;
+        }
+        while (current_threads < _no_threads)
+        {
+            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            current_threads = _no_threads_currently_on_barrier;
+        }
+        mutex_unlock<type>(&_calling_mutex);
+    }
+
+    /**
+     * @brief Change the number of threads for the barrier to handle.
+     * @param threads
+     */
+    void set_no_threads(int threads)
+    {
+        _no_threads = threads;
+    }
+
+    /**
+     * @brief Release all threads waiting on the barrier.
+     */
+    void release_all()
+    {
+        assert(_no_threads_currently_on_barrier == _no_threads);
+        mutex_lock<type>(&_thread_mutex);
+        _swap_halt_flags();
+        _no_threads_currently_on_barrier = 0;
+        mutex_unlock<type>(&_thread_mutex);
+        condition_broadcast<type>(&_thread_cond);
+    }
+
+
+private:
+    void _swap_halt_flags()
+    {
+        *_halt_flag = false;
+        if (_halt_flag == &_halt_flags[0])
+        {
+            _halt_flag = &_halt_flag[1];
+        }
+        else
+        {
+            _halt_flag = &_halt_flags[0];
+        }
+        *_halt_flag = true;
+    }
+
+    pthread_mutex_t _thread_mutex;
+    pthread_mutex_t _calling_mutex;
+
+    pthread_cond_t _thread_cond;
+    pthread_cond_t _calling_cond;
+
+    std::array<bool, 2> _halt_flags{true, true};
+    bool*_halt_flag{&_halt_flags[0]};
+    int _no_threads_currently_on_barrier{0};
+    int _no_threads{0};
+};
+
+template <ThreadType type>
+class WorkerThread
+{
+public:
+    TWINE_DECLARE_NON_COPYABLE(WorkerThread);
+
+    WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
+                        void*callback_data, std::atomic_bool& running_flag, int cpu_id): _barrier(barrier),
+                                                                                         _callback(callback),
+                                                                                         _callback_data(callback_data),
+                                                                                         _running(running_flag)
+    {
+        struct sched_param rt_params = {.sched_priority = 75};
+        pthread_attr_t task_attributes;
+        pthread_attr_init(&task_attributes);
+
+        pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+        pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+        pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+        pthread_attr_setschedparam(&task_attributes, &rt_params);
+        cpu_set_t cpus;
+        CPU_ZERO(&cpus);
+        CPU_SET(cpu_id, &cpus);
+        pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+
+        int res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+        assert(res == 0);
+    }
+
+    ~WorkerThread()
+    {
+        thread_join<type>(_thread_handle, nullptr);
+    }
+
+    static void* _worker_function(void* data)
+    {
+        reinterpret_cast<WorkerThread<type>*>(data)->_internal_worker_function();
+        return nullptr;
+    }
+
+private:
+    void _internal_worker_function()
+    {
+        // this is a realtime thread
+        ThreadRtFlag rt_flag;
+        while (true)
+        {
+            _barrier.wait();
+            if (_running.load() == false)
+            {
+                // condition checked when coming out of wait as we might want to exit immediately here
+                break;
+            }
+            _callback(_callback_data);
+        }
+    }
+
+    BarrierWithTrigger<type>&   _barrier;
+    unsigned long int           _thread_handle{0};
+    WorkerCallback              _callback;
+    void*                       _callback_data;
+    const std::atomic_bool&     _running;
+};
+
+template <ThreadType type>
+class WorkerPoolImpl : public WorkerPool
+{
+public:
+    TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
+
+    explicit WorkerPoolImpl(int cores) : _no_cores(cores)
+    {}
+
+    ~WorkerPoolImpl()
+    {
+        _barrier.wait_for_all();
+        _running.store(false);
+        _barrier.release_all();
+    }
+
+    int add_worker(WorkerCallback worker_cb, void*worker_data) override
+    {
+        _barrier.set_no_threads(_no_workers + 1);
+        // round-robin assignment to cpu cores
+        int core = _no_workers % _no_cores;
+        _workers.push_back(std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, core));
+        _no_workers++;
+        // Wait until the thread is idle to avoid synchronisation issues
+
+        _barrier.wait_for_all();
+    }
+
+    void wait_for_workers_idle() override
+    {
+        _barrier.wait_for_all();
+    }
+
+    void wakeup_workers() override
+    {
+        _barrier.release_all();
+        _barrier.wait_for_all();
+    }
+
+private:
+    std::atomic_bool            _running{true};
+    int                         _no_workers{0};
+    int                         _no_cores;
+    BarrierWithTrigger<type>    _barrier;
+    std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
+};
+
+}// namespace twine
+
+#endif //TWINE_WORKER_POOL_IMPLEMENTATION_H

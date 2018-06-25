@@ -15,8 +15,7 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 SET(TEST_FILES unittests/twine_tests.cpp
-               unittests/std_worker_pool_tests.cpp
-               ../src/xenomai_worker_pool.cpp)
+               unittests/std_worker_pool_tests.cpp)
 
 set(INCLUDE_DIRS "${INCLUDE_DIRS}"
         ${PROJECT_SOURCE_DIR}/src
@@ -42,9 +41,6 @@ add_test(unit_tests unit_tests)
 # Environment variable pointing to test/data/ is set so that
 # tests can read it to access data files maintaining an independent out-of-source build
 
-add_custom_target(run_tests ALL
-        ${CMAKE_COMMAND}
-        -E env "SUSHI_TEST_DATA_DIR=${PROJECT_SOURCE_DIR}/test/data"
-        "./unit_tests")
+add_custom_target(run_tests ALL COMMAND "./unit_tests")
 add_dependencies(run_tests unit_tests)
 
