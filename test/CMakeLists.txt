@@ -1,3 +1,6 @@
+# Stress test is not build per default
+add_subdirectory(stresstest EXCLUDE_FROM_ALL)
+
 # build gtest framework
 add_subdirectory(gtest)
 enable_testing()
@@ -15,7 +18,7 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 SET(TEST_FILES unittests/twine_tests.cpp
-               unittests/std_worker_pool_tests.cpp)
+        unittests/worker_pool_tests.cpp)
 
 set(INCLUDE_DIRS "${INCLUDE_DIRS}"
         ${PROJECT_SOURCE_DIR}/src

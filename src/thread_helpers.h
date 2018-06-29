@@ -27,7 +27,7 @@ enum class ThreadType : uint32_t
 /* Templated helper functions to make the Workerpool implementation thread-agnostic */
 
 template<ThreadType type>
-inline int mutex_create(pthread_mutex_t*mutex, const pthread_mutexattr_t* attributes)
+inline int mutex_create(pthread_mutex_t* mutex, const pthread_mutexattr_t* attributes)
 {
     if constexpr (type == ThreadType::PTHREAD)
     {
@@ -40,7 +40,7 @@ inline int mutex_create(pthread_mutex_t*mutex, const pthread_mutexattr_t* attrib
 }
 
 template<ThreadType type>
-inline int mutex_destroy(pthread_mutex_t*mutex)
+inline int mutex_destroy(pthread_mutex_t* mutex)
 {
     if constexpr (type == ThreadType::PTHREAD)
     {

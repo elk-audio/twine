@@ -4,11 +4,31 @@
 #include <cassert>
 #include <atomic>
 #include <vector>
+#include <cstring>
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
 namespace twine {
+
+
+inline WorkerPoolStatus errno_to_worker_status(int error)
+{
+    switch (error)
+    {
+        case 0:
+            return WorkerPoolStatus::OK;
+
+        case EAGAIN:
+            return WorkerPoolStatus::LIMIT_EXCEEDED;
+
+        case EPERM:
+            return WorkerPoolStatus::PERMISSION_DENIED;
+
+        default:
+            return WorkerPoolStatus::ERROR;
+    }
+}
 
 /**
  * @brief Thread barrier that can be controlled from an external thread
@@ -17,6 +37,7 @@ template <ThreadType type>
 class BarrierWithTrigger
 {
 public:
+    TWINE_DECLARE_NON_COPYABLE(BarrierWithTrigger);
     /**
      * @brief Multithread barrier with trigger functionality
      * @param threads The default number of threads to handle
@@ -48,14 +69,11 @@ public:
     {
         const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
         mutex_lock<type>(&_calling_mutex);
-        _no_threads_currently_on_barrier++;
-        bool notify = _no_threads_currently_on_barrier == _no_threads;
-        mutex_unlock<type>(&_calling_mutex);
-
-        if (notify)
+        if (++_no_threads_currently_on_barrier >= _no_threads)
         {
             condition_signal<type>(&_calling_cond);
         }
+        mutex_unlock<type>(&_calling_mutex);
 
         mutex_lock<type>(&_thread_mutex);
         while (halt_flag)
@@ -94,7 +112,9 @@ public:
      */
     void set_no_threads(int threads)
     {
+        mutex_lock<type>(&_calling_mutex);
         _no_threads = threads;
+        mutex_unlock<type>(&_calling_mutex);
     }
 
     /**
@@ -103,11 +123,16 @@ public:
     void release_all()
     {
         assert(_no_threads_currently_on_barrier == _no_threads);
-        mutex_lock<type>(&_thread_mutex);
         _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
-        mutex_unlock<type>(&_thread_mutex);
+        /* For xenomai threads, it is neccesary to hold the mutex while
+         * sending the broadcast. Otherwise deadlocks can occur. For
+         * pthreads it is not neccesary but it is recommended for
+         * good realtime performance. And surprisingly enough seems
+         * a bit faster that without holding the mutex.  */
+        mutex_lock<type>(&_thread_mutex);
         condition_broadcast<type>(&_thread_cond);
+        mutex_unlock<type>(&_thread_mutex);
     }
 
 
@@ -145,10 +170,21 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerThread);
 
     WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
-                        void*callback_data, std::atomic_bool& running_flag, int cpu_id): _barrier(barrier),
-                                                                                         _callback(callback),
-                                                                                         _callback_data(callback_data),
-                                                                                         _running(running_flag)
+                        void*callback_data, std::atomic_bool& running_flag): _barrier(barrier),
+                                                                             _callback(callback),
+                                                                             _callback_data(callback_data),
+                                                                             _running(running_flag)
+    {}
+
+    ~WorkerThread()
+    {
+        if (_thread_handle != 0)
+        {
+            thread_join<type>(_thread_handle, nullptr);
+        }
+    }
+
+    int run(int cpu_id)
     {
         struct sched_param rt_params = {.sched_priority = 75};
         pthread_attr_t task_attributes;
@@ -161,14 +197,12 @@ public:
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
-        pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
-
-        thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
-    }
-
-    ~WorkerThread()
-    {
-        thread_join<type>(_thread_handle, nullptr);
+        auto res = pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+        if (res == 0)
+        {
+            return thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+        }
+        return res;
     }
 
     static void* _worker_function(void* data)
@@ -217,17 +251,25 @@ public:
         _barrier.release_all();
     }
 
-    int add_worker(WorkerCallback worker_cb, void*worker_data) override
+    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void*worker_data) override
     {
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running);
         _barrier.set_no_threads(_no_workers + 1);
         // round-robin assignment to cpu cores
-        int core = _no_workers % _no_cores;
-        _workers.push_back(std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, core));
-        _no_workers++;
-        // Wait until the thread is idle to avoid synchronisation issues
-
-        _barrier.wait_for_all();
-        return _no_workers;
+        int core = (_no_workers + 1) % _no_cores;
+        auto res = errno_to_worker_status(worker->run(core));
+        if (res == WorkerPoolStatus::OK)
+        {
+            // Wait until the thread is idle to avoid synchronisation issues
+            _no_workers++;
+            _workers.push_back(std::move(worker));
+            _barrier.wait_for_all();
+        }
+        else
+        {
+            _barrier.set_no_threads(_no_workers);
+        }
+        return res;
     }
 
     void wait_for_workers_idle() override

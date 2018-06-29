@@ -13,6 +13,14 @@ bool is_current_thread_realtime();
 
 typedef void (*WorkerCallback)(void* data);
 
+enum class WorkerPoolStatus
+{
+    OK,
+    ERROR,
+    PERMISSION_DENIED,
+    LIMIT_EXCEEDED
+};
+
 class WorkerPool
 {
 public:
@@ -30,9 +38,9 @@ public:
      * @brief Add a worker to the pool
      * @param worker_cb The worker callback function that will called by he worker
      * @param worker_data A data pointer that will be passed to the worker callback
-     * @return An integer id of the added worker
+     * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    virtual int add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
+    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
 
     /**
      * @brief Wait for all workers to finish and become idle. Will block until all
