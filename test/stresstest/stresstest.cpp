@@ -7,6 +7,7 @@
 
 #include <getopt.h>
 #include <sys/mman.h>
+#include <xmmintrin.h>
 
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -27,7 +28,6 @@
 constexpr int DEFAULT_CORES = 4;
 constexpr int DEFAULT_WORKERS = 10;
 constexpr int MAX_LOAD = 300;
-constexpr int MIN_LOAD = 20;
 constexpr int DEFAULT_ITERATIONS = 10000;
 
 /* iir parameters: */
@@ -47,6 +47,11 @@ constexpr float co_b2 = co_b0;
 
 typedef std::array<float, 128> AudioBuffer;
 typedef std::array<float, 2> FilterRegister;
+
+inline void set_flush_denormals_to_zero()
+{
+    _mm_setcsr(0x9FC0);
+}
 
 /* Biquad implementation to keep the cpu busy */
 template <size_t length>
@@ -70,7 +75,7 @@ struct ProcessData
 void worker_function(void* data)
 {
     auto process_data = reinterpret_cast<ProcessData*>(data);
-    int iters = std::rand() % (MAX_LOAD - MIN_LOAD) + MIN_LOAD; // quick and dirty rand function is enough here
+    int iters = MAX_LOAD;
     for (int i = 0; i < iters; ++i)
     {
         process_filter(process_data->buffer, process_data->mem);
@@ -157,17 +162,11 @@ std::tuple<int, int, int, bool> parse_opts(int argc, char** argv)
 
 void* run_stress_test(void* data)
 {
-    auto [pool, test_data, iters, xenomai] = *(reinterpret_cast<std::tuple<twine::WorkerPool*,
-                                               std::vector<ProcessData>*, int, bool>*>(data));
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(-1, 1);
+    set_flush_denormals_to_zero();
+    auto [pool, iters, xenomai] = *(reinterpret_cast<std::tuple<twine::WorkerPool*, int, bool>*>(data));
     for (int i = 0; i < iters; ++i)
     {
         pool->wait_for_workers_idle();
-        // Fill buffers with random numbers
-        for (auto& p : *test_data) {for (auto& b : p.buffer) {b = dist(gen);}}
-
         // Run all workers
         pool->wakeup_workers();
         if ((i + 1) % 10 == 0)
@@ -176,6 +175,10 @@ void* run_stress_test(void* data)
             {
 #ifdef TWINE_BUILD_WITH_XENOMAI
                 __cobalt_printf("\rIterations: %i", i);
+                timespec t;
+                t.tv_sec = 0;
+                t.tv_nsec = 5000000;
+                __cobalt_nanosleep(&t, nullptr);
 #endif
             }
             else
@@ -219,10 +222,20 @@ int main(int argc, char **argv)
     std::vector<ProcessData> data;
     data.reserve(DEFAULT_ITERATIONS);
     auto worker_pool = twine::WorkerPool::CreateWorkerPool(cores);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dist(-1, 1);
+
     for (int i = 0; i < workers; ++i)
     {
         ProcessData d;
         d.mem = {0,0};
+        for (auto& b : d.buffer)
+        {
+            b = dist(gen);
+        }
+
         data.push_back(d);
         auto res = worker_pool->add_worker(worker_function, &data[i]);
         if (res != twine::WorkerPoolStatus::OK)
@@ -231,7 +244,7 @@ int main(int argc, char **argv)
             return -1;
         }
     }
-    auto test_data = std::make_tuple(worker_pool.get(), &data, iters, xenomai);
+    auto test_data = std::make_tuple(worker_pool.get(), iters, xenomai);
     if (xenomai)
     {
         run_stress_test_in_xenomai_thread(&test_data);

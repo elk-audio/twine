@@ -123,6 +123,7 @@ public:
     void release_all()
     {
         assert(_no_threads_currently_on_barrier == _no_threads);
+        mutex_lock<type>(&_calling_mutex);
         _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
         /* For xenomai threads, it is neccesary to hold the mutex while
@@ -133,6 +134,7 @@ public:
         mutex_lock<type>(&_thread_mutex);
         condition_broadcast<type>(&_thread_cond);
         mutex_unlock<type>(&_thread_mutex);
+        mutex_unlock<type>(&_calling_mutex);
     }
 
 
