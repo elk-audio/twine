@@ -66,13 +66,13 @@ void worker_function(void* data)
 
 TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 {
-    _module_under_test.add_worker(worker_function, &a);
-    _module_under_test.add_worker(worker_function, &b);
-
+    auto res = _module_under_test.add_worker(worker_function, &a);
+    ASSERT_EQ(WorkerPoolStatus::OK, res);
+    res = _module_under_test.add_worker(worker_function, &b);
+    ASSERT_EQ(WorkerPoolStatus::OK, res);
     _module_under_test.wait_for_workers_idle();
     ASSERT_FALSE(a);
     ASSERT_FALSE(b);
-
     _module_under_test.wakeup_workers();
 
     ASSERT_TRUE(a);
