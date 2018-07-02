@@ -18,7 +18,7 @@ void init_xenomai()
     running_xenomai_realtime.set(true);
 }
 
-std::unique_ptr<WorkerPool> WorkerPool::CreateWorkerPool(int cores)
+std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores)
 {
     if (running_xenomai_realtime.is_set())
     {

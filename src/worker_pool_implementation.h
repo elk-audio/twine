@@ -40,7 +40,6 @@ public:
     TWINE_DECLARE_NON_COPYABLE(BarrierWithTrigger);
     /**
      * @brief Multithread barrier with trigger functionality
-     * @param threads The default number of threads to handle
      */
     BarrierWithTrigger()
     {

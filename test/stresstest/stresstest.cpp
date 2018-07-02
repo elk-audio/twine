@@ -175,6 +175,8 @@ void* run_stress_test(void* data)
             {
 #ifdef TWINE_BUILD_WITH_XENOMAI
                 __cobalt_printf("\rIterations: %i", i);
+                /* Since xenomai runs with realtime priority, we can't max out cpu usage as
+                 * that would starve the linux kernel, so we leave a time slice for it here */
                 timespec t;
                 t.tv_sec = 0;
                 t.tv_nsec = 5000000;
@@ -221,7 +223,7 @@ int main(int argc, char **argv)
 
     std::vector<ProcessData> data;
     data.reserve(DEFAULT_ITERATIONS);
-    auto worker_pool = twine::WorkerPool::CreateWorkerPool(cores);
+    auto worker_pool = twine::WorkerPool::create_worker_pool(cores);
 
     std::random_device rd;
     std::mt19937 gen(rd());

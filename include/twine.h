@@ -30,7 +30,7 @@ public:
      *              than the number of cores on the machine.
      * @return
      */
-    static std::unique_ptr<WorkerPool> CreateWorkerPool(int cores);
+    static std::unique_ptr<WorkerPool> create_worker_pool(int cores);
 
     virtual ~WorkerPool() = default;
 

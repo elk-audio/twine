@@ -20,6 +20,3 @@ if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(stress_test)
 endif()
 target_link_libraries(stress_test PRIVATE "${LINK_LIBRARIES}")
-
-
-add_dependencies(stress_test twine)
