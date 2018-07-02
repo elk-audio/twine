@@ -5,9 +5,8 @@ project(twine)
 #  Build configuration #
 ########################
 
-#set(WITH_APPS true CACHE BOOL "Build included applications")
-set(WITH_TESTS true CACHE BOOL "Build and run unittests")
-set(WITH_XENOMAI true CACHE BOOL "Build with xenomai realtime thread support")
+set(TWINE_WITH_TESTS true CACHE BOOL "Build and run unittests")
+set(TWINE_WITH_XENOMAI true CACHE BOOL "Build with xenomai realtime thread support")
 
 ####################
 #  Compiler Flags  #
@@ -17,13 +16,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Global flags
-set(PROJECT_C_FLAGS "-Wall -Wextra")
+set(PROJECT_CXX_FLAGS "-Wall -Wextra")
 
 # Build optimization flags - these are the same for all targets
-set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O3 -ftree-vectorize -ffast-math -m64 -march=corei7 -mtune=corei7 -mfpmath=sse -msse4.2")
-set(CMAKE_C_FLAGS_DEBUG   "-DDEBUG -O0 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 -m64 -march=corei7 -mtune=corei7 -mfpmath=sse -msse4.2")
+set(CMAKE_CXX_FLAGS_DEBUG   "-DDEBUG -O0 -g")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${PROJECT_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PROJECT_CXX_FLAGS}")
 
 #########################
 #  Include Directories  #
@@ -43,6 +42,7 @@ include_directories(${INCLUDE_DIRS})
 # This intentionally does not include all the super-auto-magic linker wrappers,
 # who seems to play very badly with other libraries at static initialization.
 function(add_xenomai_to_target target)
+    add_definitions(-DTWINE_BUILD_WITH_XENOMAI)
     set(XENOMAI_BASE_DIR /usr/xenomai)
 
     # from `xeno-config --skin=posix --cflags`
@@ -68,26 +68,20 @@ endfunction()
 
 set(COMPILATION_UNITS
         src/twine.cpp
-        src/worker_pool.cpp
 )
-
-if (${WITH_XENOMAI})
-    set(COMPILATION_UNITS ${COMPILATION_UNITS}
-            src/xenomai_worker_pool.cpp)
-endif()
 
 # Enumerate all the headers separately so that CLion can index them
 set(EXTRA_CLION_SOURCES
         include/twine.h
-        include/worker_pool.h
-        src/std_worker_pool.h
-        src/xenomai_worker_pool.h
+        src/twine_internal.h
+        src/worker_pool_implementation.h
+        src/thread_helpers.h
 )
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
-add_library(yarn SHARED ${SOURCE_FILES})
-if (${WITH_XENOMAI})
+add_library(twine SHARED ${SOURCE_FILES})
+if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)
 endif()
 
@@ -96,9 +90,6 @@ endif()
 #  Subdirectory projects                    #
 #############################################
 
-#if (${WITH_APPS})
-#    add_subdirectory(apps)
-#endif()
-#if (${WITH_TESTS})
-#    add_subdirectory(test)
-#endif()
+if (${WITH_TESTS})
+    add_subdirectory(test)
+endif()

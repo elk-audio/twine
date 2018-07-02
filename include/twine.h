@@ -1,11 +1,56 @@
 #ifndef TWINE_TWINE_H_
 #define TWINE_TWINE_H_
 
+#include <memory>
+
 namespace twine {
 
-    bool current_thread_is_realtime();
+/**
+ * @brief Function to determine the realtime processing state of the current thread
+ * @return true if called from a realtime audio processing thread, false other
+ */
+bool is_current_thread_realtime();
 
-    void init_xenomai();
+typedef void (*WorkerCallback)(void* data);
+
+class WorkerPool
+{
+public:
+    /**
+     * @brief Construct a WorkerPool object.
+     * @param cores The maximum number of cores to use, must not be higher
+     *              than the number of cores on the machine.
+     * @return
+     */
+    static std::unique_ptr<WorkerPool> CreateWorkerPool(int cores);
+
+    virtual ~WorkerPool() = default;
+
+    /**
+     * @brief Add a worker to the pool
+     * @param worker_cb The worker callback function that will called by he worker
+     * @param worker_data A data pointer that will be passed to the worker callback
+     * @return An integer id of the added worker
+     */
+    virtual int add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
+
+    /**
+     * @brief Wait for all workers to finish and become idle. Will block until all
+     *        workers are idle.
+     */
+    virtual void wait_for_workers_idle() = 0;
+
+    /**
+     * @brief After calling, all workers will be signaled to run and will call their
+     *        respective callback functions in a unspecified order. The call will block
+     *        until all workers have finished and returned to idle.
+     */
+    virtual void wakeup_workers() = 0;
+
+protected:
+    WorkerPool() = default;
+};
+
 
 }// namespace twine
 
