@@ -64,4 +64,13 @@ inline int __cobalt_pthread_join([[maybe_unused]]pthread_t thread, [[maybe_unuse
 
 }
 
+inline int __cobalt_clock_gettime(clockid_t clock_id, struct timespec *tp)
+{
+    assert(false);
+    tp->tv_sec = 0;
+    tp->tv_nsec = 0;
+    return 0;
+}
+
+
 #endif //TWINE_XENOMAI_STUBS_H
