@@ -230,7 +230,7 @@ private:
     }
 
     BarrierWithTrigger<type>&   _barrier;
-    unsigned long int           _thread_handle{0};
+    pthread_t                   _thread_handle{0};
     WorkerCallback              _callback;
     void*                       _callback_data;
     const std::atomic_bool&     _running;
