@@ -2,6 +2,7 @@
 #define TWINE_TWINE_H_
 
 #include <memory>
+#include <chrono>
 
 namespace twine {
 
@@ -20,6 +21,15 @@ enum class WorkerPoolStatus
     PERMISSION_DENIED,
     LIMIT_EXCEEDED
 };
+
+/**
+ * @brief Returns the current time at the time of the call. This function is safe to call
+ *        from an rt context. The time returned should not be used for synchronising audio
+ *        events such as note on/offs as this does not represent the time when the audio
+ *        buffer will be sent to an output.
+ * @return The current time in nanoseconds.
+ */
+std::chrono::nanoseconds current_rt_time();
 
 class WorkerPool
 {

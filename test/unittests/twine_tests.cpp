@@ -17,3 +17,11 @@ TEST (TwineTest, TestThreadRtFlag)
     std::thread test_thread([](){ASSERT_FALSE(is_current_thread_realtime());});
     test_thread.join();
 }
+
+TEST (TwineTest, TestRtTimestamp)
+{
+    auto time_1 = current_rt_time();
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    auto time_2 = current_rt_time();
+    ASSERT_GT(time_2, time_1);
+}
