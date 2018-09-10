@@ -102,3 +102,10 @@ endif()
 if (${WITH_TESTS})
     add_subdirectory(test)
 endif()
+
+#############
+#  Install  #
+#############
+
+install(TARGETS twine DESTINATION lib)
+
