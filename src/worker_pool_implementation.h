@@ -4,7 +4,9 @@
 #include <cassert>
 #include <atomic>
 #include <vector>
+#include <array>
 #include <cstring>
+#include <cerrno>
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
@@ -195,10 +197,13 @@ public:
         pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
         pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
         pthread_attr_setschedparam(&task_attributes, &rt_params);
+        auto res = 0;
+#ifndef __APPLE__
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
-        auto res = pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+        res = pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
+#endif
         if (res == 0)
         {
             return thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
