@@ -99,7 +99,7 @@ endif()
 #  Subdirectory projects                    #
 #############################################
 
-if (${WITH_TESTS})
+if (${TWINE_WITH_TESTS})
     add_subdirectory(test)
 endif()
 
