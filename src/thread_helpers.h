@@ -14,7 +14,7 @@
 #include "xenomai_stubs.h"
 #endif
 
-#include "twine.h"
+#include "../include/twine/twine.h"
 
 namespace twine {
 

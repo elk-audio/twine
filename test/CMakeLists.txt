@@ -1,8 +1,5 @@
-# Stress test is not build per default
-add_subdirectory(stresstest EXCLUDE_FROM_ALL)
-
 # build gtest framework
-add_subdirectory(gtest)
+add_subdirectory(gtest EXCLUDE_FROM_ALL)
 enable_testing()
 
 #####################################
@@ -16,34 +13,31 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 #  Unit Test Files  #
 #####################
 
+# Unit test build without xenomai
+
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
-SET(TEST_FILES unittests/twine_tests.cpp
-        unittests/worker_pool_tests.cpp)
 
-set(INCLUDE_DIRS "${INCLUDE_DIRS}"
-        ${PROJECT_SOURCE_DIR}/src
-        ${PROJECT_SOURCE_DIR}/test/unittests
-        ${PROJECT_SOURCE_DIR}/test/gtest/include)
+add_executable(unit_tests unittests/twine_tests.cpp
+                          unittests/worker_pool_tests.cpp)
 
-include_directories(${INCLUDE_DIRS})
+target_include_directories(unit_tests PRIVATE  ${PROJECT_SOURCE_DIR}/include
+                                               ${PROJECT_SOURCE_DIR}/src
+                                               ${PROJECT_SOURCE_DIR}/test/gtest/include)
 
-#################################
-#  Statically linked libraries  #
-#################################
+target_link_libraries(unit_tests gtest gtest_main)
 
-set(TEST_LINK_LIBRARIES
-        gtest
-        gtest_main        )
+target_compile_features(unit_tests PRIVATE cxx_std_17)
+target_compile_options(unit_tests PRIVATE -Wall -Wextra)
 
-add_executable(unit_tests ${TEST_FILES})
-
-target_link_libraries(unit_tests "${TEST_LINK_LIBRARIES}")
 add_test(unit_tests unit_tests)
 
 ### Custom target for running the tests
-# Environment variable pointing to test/data/ is set so that
-# tests can read it to access data files maintaining an independent out-of-source build
 
 add_custom_target(run_tests ALL COMMAND "./unit_tests")
 add_dependencies(run_tests unit_tests)
+
+# Stress test is not built per default
+add_subdirectory(stresstest EXCLUDE_FROM_ALL)
+
+
 
