@@ -2,10 +2,6 @@
 add_subdirectory(gtest EXCLUDE_FROM_ALL)
 enable_testing()
 
-#####################################
-#  Build Flags                      #
-#####################################
-
 # Overwrite parent definition to avoid issues with Xenomai wrappers
 set(CMAKE_EXE_LINKER_FLAGS "")
 
@@ -13,8 +9,7 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 #  Unit Test Files  #
 #####################
 
-# Unit test build without xenomai
-
+# Unit tests are build without xenomai regardles
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 
 add_executable(unit_tests unittests/twine_tests.cpp

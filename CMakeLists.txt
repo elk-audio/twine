@@ -44,7 +44,7 @@ function(add_xenomai_to_target target)
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
-    target_link_libraries(${target} PRIVATE ${COBALT_LIB})
+    target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
 endfunction()
 
 ####################
@@ -64,6 +64,7 @@ set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 add_library(twine SHARED ${SOURCE_FILES})
 
 target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(twine PRIVATE pthread)
 
 #Require users to have c++17 support
 target_compile_features(twine PUBLIC cxx_std_17)
