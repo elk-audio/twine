@@ -80,3 +80,11 @@ endif()
 if (${TWINE_WITH_TESTS})
     add_subdirectory(test)
 endif()
+
+#############
+#  Install  #
+#############
+
+SET_TARGET_PROPERTIES(twine PROPERTIES VERSION 0.1)
+
+install(TARGETS twine DESTINATION lib)
