@@ -89,5 +89,11 @@ endif()
 #############
 
 SET_TARGET_PROPERTIES(twine PROPERTIES VERSION 0.1)
+set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 
-install(TARGETS twine DESTINATION lib)
+install(TARGETS twine
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+)
+
