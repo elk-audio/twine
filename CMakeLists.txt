@@ -14,6 +14,8 @@ option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 #  Cross compilation  #
 #######################
 
+set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
+
 if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
     set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
 endif()
@@ -26,8 +28,6 @@ endif()
 #######################
 #  Utility functions  #
 #######################
-
-set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
 
 # Set Xenomai build options at local scope
 # This intentionally does not include all the super-auto-magic linker wrappers,
