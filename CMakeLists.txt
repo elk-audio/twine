@@ -5,7 +5,8 @@ project(twine)
 #  Build Options       #
 ########################
 
-# These can be overriden with set(BUILD_OPTION <new value>)
+# These can be overriden by ccmake, commandline args or using
+# set(BUILD_OPTION <new value> CACHE <type> "") in an including project
 
 option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
