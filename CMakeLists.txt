@@ -2,16 +2,20 @@ cmake_minimum_required(VERSION 3.8)
 project(twine)
 
 ########################
-#  Build configuration #
+#  Build Options       #
 ########################
 
-set(TWINE_WITH_TESTS true CACHE BOOL "Build and run unittests")
-set(TWINE_WITH_XENOMAI true CACHE BOOL "Build with xenomai realtime thread support")
-set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
+# These can be overriden by ccmake, commandline args or using
+# set(BUILD_OPTION <new value> CACHE <type> "") in an including project
 
-####################
-#  Compiler Flags  #
-####################
+option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
+option(TWINE_WITH_TESTS "Build and run unit tests" ON)
+
+#######################
+#  Cross compilation  #
+#######################
+
+set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
 
 if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
     set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
@@ -21,26 +25,6 @@ if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
     set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
     message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
 endif()
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Global flags
-set(PROJECT_CXX_FLAGS "-Wall -Wextra")
-
-# Build optimization flags - these are the same for all targets
-set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 ")
-set(CMAKE_CXX_FLAGS_DEBUG   "-DDEBUG -O0 -g")
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PROJECT_CXX_FLAGS}")
-
-#########################
-#  Include Directories  #
-#########################
-
-set(INCLUDE_DIRS
-    ${PROJECT_SOURCE_DIR}/include
-)
 
 #######################
 #  Utility functions  #
@@ -61,44 +45,56 @@ function(add_xenomai_to_target target)
     )
 
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
-
-    set(XENOMAI_LINK_LIBRARIES ${COBALT_LIB} pthread rt m)
-
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
-    target_link_libraries(${target} PRIVATE ${XENOMAI_LINK_LIBRARIES})
+    target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
 endfunction()
 
-##################
-#  Source Files  #
-##################
+####################
+#  Library target  #
+####################
 
-set(COMPILATION_UNITS
-        src/twine.cpp
-)
+set(COMPILATION_UNITS src/twine.cpp)
 
 # Enumerate all the headers separately so that CLion can index them
-set(EXTRA_CLION_SOURCES
-        include/twine.h
-        src/twine_internal.h
-        src/worker_pool_implementation.h
-        src/thread_helpers.h
-)
+set(EXTRA_CLION_SOURCES  include/twine/twine.h
+                         src/twine_internal.h
+                         src/worker_pool_implementation.h
+                         src/thread_helpers.h)
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
 add_library(twine SHARED ${SOURCE_FILES})
-target_include_directories(twine PRIVATE ${INCLUDE_DIRS})
+
+target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(twine PRIVATE pthread)
+
+#Require users to have c++17 support
+target_compile_features(twine PUBLIC cxx_std_17)
+target_compile_options(twine PRIVATE -Wall -Wextra)
 
 if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)
 endif()
 
+#######################
+#  Unit test targets  #
+#######################
 
-#############################################
-#  Subdirectory projects                    #
-#############################################
-
-if (${WITH_TESTS})
+if (${TWINE_WITH_TESTS})
     add_subdirectory(test)
 endif()
+
+#############
+#  Install  #
+#############
+
+SET_TARGET_PROPERTIES(twine PROPERTIES VERSION 0.1)
+set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
+
+install(TARGETS twine
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/twine
+)
+

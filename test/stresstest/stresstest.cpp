@@ -9,7 +9,6 @@
 #include <sys/mman.h>
 #include <xmmintrin.h>
 
-
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <cobalt/pthread.h>
@@ -17,7 +16,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include "twine.h"
+#include "twine/twine.h"
 #include "twine_internal.h"
 
 /*
