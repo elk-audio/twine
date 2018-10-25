@@ -8,6 +8,13 @@
 #include <cstring>
 #include <cerrno>
 
+#ifdef __SSE__
+#include <xmmintrin.h>
+#define disable_denormals() _mm_setcsr(0x9FC0)
+#else
+#define disable_denormals()
+#endif
+
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
@@ -173,10 +180,13 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerThread);
 
     WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
-                        void*callback_data, std::atomic_bool& running_flag): _barrier(barrier),
-                                                                             _callback(callback),
-                                                                             _callback_data(callback_data),
-                                                                             _running(running_flag)
+                                         void*callback_data, std::atomic_bool& running_flag,
+                                         bool disable_denormals): _barrier(barrier),
+                                                                  _callback(callback),
+                                                                  _callback_data(callback_data),
+                                                                  _running(running_flag),
+                                                                  _disable_denormals(disable_denormals)
+
     {}
 
     ~WorkerThread()
@@ -222,6 +232,10 @@ private:
     {
         // this is a realtime thread
         ThreadRtFlag rt_flag;
+        if (_disable_denormals)
+        {
+            disable_denormals();
+        }
         while (true)
         {
             _barrier.wait();
@@ -239,6 +253,7 @@ private:
     WorkerCallback              _callback;
     void*                       _callback_data;
     const std::atomic_bool&     _running;
+    bool                        _disable_denormals;
 };
 
 template <ThreadType type>
@@ -247,7 +262,8 @@ class WorkerPoolImpl : public WorkerPool
 public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
-    explicit WorkerPoolImpl(int cores) : _no_cores(cores)
+    explicit WorkerPoolImpl(int cores, bool disable_denormals) : _no_cores(cores),
+                                                                 _disable_denormals(disable_denormals)
     {}
 
     ~WorkerPoolImpl()
@@ -259,7 +275,7 @@ public:
 
     WorkerPoolStatus add_worker(WorkerCallback worker_cb, void*worker_data) override
     {
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running);
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, _disable_denormals);
         _barrier.set_no_threads(_no_workers + 1);
         // round-robin assignment to cpu cores
         int core = (_no_workers + 1) % _no_cores;
@@ -293,6 +309,7 @@ private:
     std::atomic_bool            _running{true};
     int                         _no_workers{0};
     int                         _no_cores;
+    bool                        _disable_denormals;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
 };

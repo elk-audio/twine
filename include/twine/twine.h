@@ -38,9 +38,11 @@ public:
      * @brief Construct a WorkerPool object.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
+     * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
+     *                          and DAC (denormals are zero) flags.
      * @return
      */
-    static std::unique_ptr<WorkerPool> create_worker_pool(int cores);
+    static std::unique_ptr<WorkerPool> create_worker_pool(int cores, bool disable_denormals = true);
 
     virtual ~WorkerPool() = default;
 

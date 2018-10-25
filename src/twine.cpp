@@ -20,13 +20,13 @@ void init_xenomai()
     running_xenomai_realtime.set(true);
 }
 
-std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores)
+std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disable_denormals)
 {
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores);
+        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores, disable_denormals);
     }
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals);
 }
 
 std::chrono::nanoseconds current_rt_time()
