@@ -1,3 +1,10 @@
+#ifdef __SSE__
+#include <xmmintrin.h>
+#define denormals_intrinsic() _mm_setcsr(0x9FC0)
+#else
+#define denormals_intrinsic()
+#endif
+
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "worker_pool_implementation.h"
@@ -41,6 +48,11 @@ std::chrono::nanoseconds current_rt_time()
     {
         return std::chrono::high_resolution_clock::now().time_since_epoch();
     }
+}
+
+void set_flush_denormals_to_zero()
+{
+    denormals_intrinsic();
 }
 
 

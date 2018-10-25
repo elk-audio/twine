@@ -12,6 +12,13 @@ namespace twine {
  */
 bool is_current_thread_realtime();
 
+/**
+ * @brief Sets the FTZ (flush denormals to zero) and DAC (denormals are zero) flags
+ *        in the cpu to avoid performance hits of denormals in the audio thread
+ *        Only implemented for x86 cpus with SSE support
+ */
+void set_flush_denormals_to_zero();
+
 typedef void (*WorkerCallback)(void* data);
 
 enum class WorkerPoolStatus

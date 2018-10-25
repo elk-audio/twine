@@ -8,18 +8,12 @@
 #include <cstring>
 #include <cerrno>
 
-#ifdef __SSE__
-#include <xmmintrin.h>
-#define disable_denormals() _mm_setcsr(0x9FC0)
-#else
-#define disable_denormals()
-#endif
-
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
 namespace twine {
 
+void set_flush_denormals_to_zero();
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
@@ -234,7 +228,7 @@ private:
         ThreadRtFlag rt_flag;
         if (_disable_denormals)
         {
-            disable_denormals();
+            set_flush_denormals_to_zero();
         }
         while (true)
         {
