@@ -1,8 +1,8 @@
 #ifdef __SSE__
-#include <xmmintrin.h>
-#define denormals_intrinsic() _mm_setcsr(0x9FC0)
+    #include <xmmintrin.h>
+    #define denormals_intrinsic() _mm_setcsr(0x9FC0)
 #else
-#define denormals_intrinsic()
+    #define denormals_intrinsic()
 #endif
 
 #include "twine/twine.h"
