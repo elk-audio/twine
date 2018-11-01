@@ -1,3 +1,10 @@
+#ifdef __SSE__
+    #include <xmmintrin.h>
+    #define denormals_intrinsic() _mm_setcsr(0x9FC0)
+#else
+    #define denormals_intrinsic()
+#endif
+
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "worker_pool_implementation.h"
@@ -20,13 +27,13 @@ void init_xenomai()
     running_xenomai_realtime.set(true);
 }
 
-std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores)
+std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disable_denormals)
 {
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores);
+        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores, disable_denormals);
     }
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals);
 }
 
 std::chrono::nanoseconds current_rt_time()
@@ -41,6 +48,11 @@ std::chrono::nanoseconds current_rt_time()
     {
         return std::chrono::high_resolution_clock::now().time_since_epoch();
     }
+}
+
+void set_flush_denormals_to_zero()
+{
+    denormals_intrinsic();
 }
 
 

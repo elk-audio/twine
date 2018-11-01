@@ -53,7 +53,7 @@ class PthreadWorkerPoolTest : public ::testing::Test
 protected:
     PthreadWorkerPoolTest() {}
 
-    WorkerPoolImpl<ThreadType::PTHREAD> _module_under_test{2};
+    WorkerPoolImpl<ThreadType::PTHREAD> _module_under_test{2, true};
     bool a{false};
     bool b{false};
 };
