@@ -69,8 +69,9 @@ public:
 
     /**
      * @brief After calling, all workers will be signaled to run and will call their
-     *        respective callback functions in a unspecified order. The call will block
-     *        until all workers have finished and returned to idle.
+     *        respective callback functions in a unspecified order. The call returns
+     *        immediately, it is the caller's responsibility to call wait_for_workers_idle()
+     *        before the end of the RT processing callback.
      */
     virtual void wakeup_workers() = 0;
 

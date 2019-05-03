@@ -70,10 +70,10 @@ TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
     ASSERT_EQ(WorkerPoolStatus::OK, res);
     res = _module_under_test.add_worker(worker_function, &b);
     ASSERT_EQ(WorkerPoolStatus::OK, res);
-    _module_under_test.wait_for_workers_idle();
     ASSERT_FALSE(a);
     ASSERT_FALSE(b);
     _module_under_test.wakeup_workers();
+    _module_under_test.wait_for_workers_idle();
 
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);

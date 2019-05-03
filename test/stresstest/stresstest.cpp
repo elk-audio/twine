@@ -235,7 +235,6 @@ void* run_stress_test(void* data)
     for (int i = 0; i < iters; ++i)
     {
         auto start_time = twine::current_rt_time();
-        pool->wait_for_workers_idle();
         // Run all workers
         pool->wakeup_workers();
         auto end_time = twine::current_rt_time();
@@ -261,6 +260,7 @@ void* run_stress_test(void* data)
         {
             print_timings(process_data, i, xenomai, start_time, end_time);
         }
+        pool->wait_for_workers_idle();
     }
     return nullptr;
 }

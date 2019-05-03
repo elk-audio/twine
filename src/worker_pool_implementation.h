@@ -296,7 +296,6 @@ public:
     void wakeup_workers() override
     {
         _barrier.release_all();
-        _barrier.wait_for_all();
     }
 
 private:
