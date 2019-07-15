@@ -5,6 +5,8 @@
     #define denormals_intrinsic()
 #endif
 
+#include <cobalt/stdio.h>
+
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "worker_pool_implementation.h"
@@ -20,6 +22,18 @@ static XenomaiRtFlag running_xenomai_realtime;
 bool is_current_thread_realtime()
 {
     return ThreadRtFlag::is_realtime();
+}
+
+int rt_printf(const char *format, ...)
+{
+    va_list args;
+    int n;
+
+    va_start(args, format);
+    n = rt_vfprintf(stdout, format, args);
+    va_end(args);
+
+    return n;
 }
 
 void init_xenomai()

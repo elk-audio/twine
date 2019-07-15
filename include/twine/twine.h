@@ -19,6 +19,8 @@ bool is_current_thread_realtime();
  */
 void set_flush_denormals_to_zero();
 
+int rt_printf(const char *format, ...);
+
 typedef void (*WorkerCallback)(void* data);
 
 enum class WorkerPoolStatus
@@ -46,7 +48,7 @@ public:
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
-     *                          and DAZ (denormals are zero) flags.
+     *                          and DAC (denormals are zero) flags.
      * @return
      */
     static std::unique_ptr<WorkerPool> create_worker_pool(int cores, bool disable_denormals = true);
@@ -69,9 +71,8 @@ public:
 
     /**
      * @brief After calling, all workers will be signaled to run and will call their
-     *        respective callback functions in a unspecified order. The call returns
-     *        immediately, it is the caller's responsibility to call wait_for_workers_idle()
-     *        before the end of the RT processing callback.
+     *        respective callback functions in a unspecified order. The call will block
+     *        until all workers have finished and returned to idle.
      */
     virtual void wakeup_workers() = 0;
 
