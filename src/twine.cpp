@@ -5,7 +5,15 @@
     #define denormals_intrinsic()
 #endif
 
-#include <cobalt/stdio.h>
+#ifdef TWINE_BUILD_WITH_XENOMAI
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+    #include <cobalt/stdio.h>
+    #pragma GCC diagnostic pop
+#else
+    #include <cstdio>
+    #include <cstdarg>
+    #define rt_vfprintf vfprintf
+#endif
 
 #include "twine/twine.h"
 #include "twine_internal.h"
