@@ -1,5 +1,5 @@
 # TWINE
-## Thread and Worker INterface for Elk music os
+## Thread and Worker INterface for Elk Audio OS
 
 Support library for managing realtime threads and worker pools
 
