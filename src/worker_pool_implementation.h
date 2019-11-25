@@ -12,6 +12,11 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Worker pool implementation
+ * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ */
+
 #ifndef TWINE_WORKER_POOL_IMPLEMENTATION_H
 #define TWINE_WORKER_POOL_IMPLEMENTATION_H
 

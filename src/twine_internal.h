@@ -12,6 +12,11 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Twine implementation
+ * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ */
+
 #ifndef TWINE_TWINE_INTERNAL_H
 #define TWINE_TWINE_INTERNAL_H
 

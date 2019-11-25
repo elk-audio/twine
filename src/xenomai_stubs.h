@@ -12,6 +12,11 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Empty stubs for building without Xenomai support
+ * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ */
+
 #ifndef TWINE_XENOMAI_STUBS_H
 #define TWINE_XENOMAI_STUBS_H
 
@@ -19,22 +24,22 @@
 
 namespace twine {
 
-inline int __cobalt_pthread_mutex_init([[maybe_unused]]pthread_mutex_t*mutex, [[maybe_unused]]const pthread_mutexattr_t* attributes)
+inline int __cobalt_pthread_mutex_init([[maybe_unused]]pthread_mutex_t* mutex, [[maybe_unused]]const pthread_mutexattr_t* attributes)
 {
     assert(false);
     return 0;
 }
-inline int __cobalt_pthread_mutex_destroy([[maybe_unused]] pthread_mutex_t*mutex)
+inline int __cobalt_pthread_mutex_destroy([[maybe_unused]] pthread_mutex_t* mutex)
 {
     assert(false);
     return 0;
 }
-inline int __cobalt_pthread_mutex_lock([[maybe_unused]] pthread_mutex_t*mutex)
+inline int __cobalt_pthread_mutex_lock([[maybe_unused]] pthread_mutex_t* mutex)
 {
     assert(false);
     return 0;
 }
-inline int __cobalt_pthread_mutex_unlock([[maybe_unused]] pthread_mutex_t*mutex)
+inline int __cobalt_pthread_mutex_unlock([[maybe_unused]] pthread_mutex_t* mutex)
 {
     assert(false);
     return 0;

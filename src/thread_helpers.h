@@ -12,6 +12,11 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Templated helper functions to make the Workerpool implementation thread-agnostic.
+ * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ */
+
 #ifndef TWINE_THREAD_HELPERS_H
 #define TWINE_THREAD_HELPERS_H
 
@@ -37,8 +42,6 @@ enum class ThreadType : uint32_t
     PTHREAD,
     XENOMAI
 };
-
-/* Templated helper functions to make the Workerpool implementation thread-agnostic */
 
 template<ThreadType type>
 inline int mutex_create(pthread_mutex_t* mutex, const pthread_mutexattr_t* attributes)

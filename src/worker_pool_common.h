@@ -12,6 +12,11 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Common worker pool constants
+ * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ */
+
 #ifndef TWINE_WORKER_POOL_COMMON_H
 #define TWINE_WORKER_POOL_COMMON_H
 
