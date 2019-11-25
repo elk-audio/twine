@@ -3,7 +3,7 @@
 
 Support library for managing realtime threads and worker pools
 
-Copyright 2018 MIND Music Labs AB, Stockholm, Sweden.
+Copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm, Sweden.
 
 ## Usage
 To include twine in a CMake based project the lines below needs to be added to the projects CMake configuration. Further build options can be found in twine/CMakeLists.txt
