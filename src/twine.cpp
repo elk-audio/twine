@@ -87,7 +87,7 @@ std::chrono::nanoseconds current_rt_time()
     }
     else
     {
-        return std::chrono::high_resolution_clock::now().time_since_epoch();
+        return std::chrono::steady_clock::now().time_since_epoch();
     }
 }
 
