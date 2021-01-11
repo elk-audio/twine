@@ -11,6 +11,8 @@ project(twine)
 option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 
+SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+
 #######################
 #  Cross compilation  #
 #######################
@@ -34,7 +36,7 @@ endif()
 # This intentionally does not include all the super-auto-magic linker wrappers,
 # who seems to play very badly with other libraries at static initialization.
 function(add_xenomai_to_target target)
-    add_definitions(-DTWINE_BUILD_WITH_XENOMAI)
+    target_compile_definitions(${target} PRIVATE -DTWINE_BUILD_WITH_XENOMAI)
 
     # from `xeno-config --skin=posix --cflags`
     set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
@@ -72,6 +74,7 @@ target_link_libraries(twine PRIVATE pthread)
 #Require users to have c++17 support
 target_compile_features(twine PUBLIC cxx_std_17)
 target_compile_options(twine PRIVATE -Wall -Wextra)
+target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 
 if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine)

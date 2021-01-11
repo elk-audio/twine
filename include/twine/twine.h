@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright 2018-2020 Modern Ancient Instruments Networked AB, dba Elk
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -85,7 +85,7 @@ public:
 
     /**
      * @brief After calling, all workers will be signaled to run and will call their
-     *        respective callback functions in a unspecified order. The call will block
+     *        respective callback functions in an unspecified order. The call will block
      *        until all workers have finished and returned to idle.
      */
     virtual void wakeup_workers() = 0;
@@ -94,6 +94,41 @@ protected:
     WorkerPool() = default;
 };
 
+/**
+ * @brief Condition variable designed to signal a lower priority non-realtime thread
+ *        from a realtime thread without causing mode switches or interfering with
+ *        the rt thread operation.
+ */
+class RtConditionVariable
+{
+public:
+    /**
+     * @brief Construct an RtConditionVariable object.
+     *        Will throw std::runtime_error if xenomai xddp queues are not enabled in the
+     *        kernel or the maximum number of instances have been reached.
+     * @return
+     */
+    static std::unique_ptr<RtConditionVariable> create_rt_condition_variable();
+
+    virtual ~RtConditionVariable() = default;
+
+    /**
+     * @brief Call from a realtime thread to notify a non-rt thread to wake up.
+     */
+    virtual void notify() = 0;
+
+    /**
+     * @brief Blocks until notify() is called from a realtime thread. Call from a non-rt
+     *        thread to wait until the rt thread signals. A maximum of one thread can wait
+     *        on the condition variable at a time.
+     * @return true if the condition variable was woken up by a call to notify()
+     *              spurious wakeups could happen on some systems.
+     */
+    virtual bool wait() = 0;
+
+protected:
+    RtConditionVariable() = default;
+};
 
 }// namespace twine
 

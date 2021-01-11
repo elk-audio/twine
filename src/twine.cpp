@@ -37,6 +37,7 @@
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "worker_pool_implementation.h"
+#include "condition_variable_implementation.h"
 
 namespace twine {
 
@@ -96,5 +97,18 @@ void set_flush_denormals_to_zero()
     denormals_intrinsic();
 }
 
+
+std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()
+{
+#ifdef TWINE_BUILD_WITH_XENOMAI
+    if (running_xenomai_realtime.is_set())
+    {
+        int id = get_next_id();
+        return std::make_unique<XenomaiConditionVariable>(id);
+    }
+#endif
+
+    return std::make_unique<PosixConditionVariable>();
+}
 
 } // twine
