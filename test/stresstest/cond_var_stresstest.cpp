@@ -35,6 +35,7 @@ constexpr auto INTERVAL = std::chrono::nanoseconds(2500000);
 
 constexpr int NOTIFICATION_INTENSITY_MIN = 20;
 constexpr int NOTIFICATION_INTENSITY_MAX = 1;
+constexpr int PRINT_INTERVAL = 17;
 
 struct ProcessData
 {
@@ -117,9 +118,9 @@ std::tuple<int, int, bool, bool> parse_opts(int argc, char** argv)
     return std::make_tuple(instances, iters, xenomai, print_timings);
 }
 
-void print_iterations(int iter, bool xenomai)
+void print_iterations(int64_t iter, bool xenomai)
 {
-    if ((iter + 1) % 10 == 0)
+    if ((iter + 1) % PRINT_INTERVAL == 0)
     {
         if (xenomai)
         {
@@ -145,7 +146,7 @@ void* run_stress_test(void* data)
                                   bool,
                                   bool>*>(data));
 
-    for (int iter = 0; iter < iters; ++iter)
+    for (int64_t iter = 0; iter < iters; ++iter)
     {
         for (int i = 0; i < static_cast<int>(cond_vars->size()); ++i)
         {
@@ -240,6 +241,8 @@ int main(int argc, char **argv)
         d.run = &run;
         auto thread = std::thread(worker_function, d);
         non_rt_threads.push_back(std::move(thread));
+
+        /* Frequency should be interpreted as "notify that variable every nth interrupt" */
         frequencies.push_back(dist(gen));
     }
     auto test_data = std::make_tuple(&cond_vars, &frequencies, &rt_counts, iters, xenomai, timings);
@@ -254,14 +257,11 @@ int main(int argc, char **argv)
     run.store(false);
 
     print_results(rt_counts, non_rt_counts);
-    for (auto& i :  cond_vars)
-    {
-        i->notify();
-    }
 
-    for (auto& i : non_rt_threads)
+    for (int i = 0; i < instances ; ++i)
     {
-        i.join();
+        cond_vars[i]->notify();
+        non_rt_threads[i].join();
     }
     return 0;
 }
