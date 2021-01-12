@@ -31,6 +31,10 @@
 
 namespace twine {
 
+/**
+ * @brief Implementation with regular c++ std library constructs for
+ *        use in a regular linux context.
+ */
 class PosixConditionVariable : public RtConditionVariable
 {
 public:
@@ -67,6 +71,10 @@ using MsgType = int;
 
 constexpr size_t NUM_ELEMENTS = 64;
 
+/**
+ * @brief Implementation using xenomai xddp queues that allow signalling a
+ *        non xenomai thread from a xenomai thread.
+ */
 class XenomaiConditionVariable : public RtConditionVariable
 {
 public:
@@ -94,16 +102,16 @@ private:
  * It is set with CONFIG_XENO_OPT_PIPE_NRDEV, pass the same value
  * to twine when building for xenomai */
 constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
-static std::array<bool, MAX_XENOMAI_DEVICES> ids;
+static std::array<bool, MAX_XENOMAI_DEVICES> available_ids;
 static std::mutex mutex;
 
 int get_next_id()
 {
-    for (auto i = 0u; i < ids.size(); ++i)
+    for (auto i = 0u; i < available_ids.size(); ++i)
     {
-        if (ids[i] == false)
+        if (available_ids[i] == false)
         {
-            ids[i] = true;
+            available_ids[i] = true;
             return i;
         }
     }
@@ -114,7 +122,7 @@ void deregister_id(int id)
 {
     assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
     std::unique_lock<std::mutex> lock(mutex);
-    ids[id] = false;
+    available_ids[id] = false;
 }
 
 XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
