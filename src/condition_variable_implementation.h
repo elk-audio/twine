@@ -139,14 +139,14 @@ XenomaiConditionVariable::~XenomaiConditionVariable()
 void XenomaiConditionVariable::notify()
 {
     MsgType data = 1;
-    __cobalt_sendto(_socket_handle, &data, sizeof(data), 0, nullptr, 0);
+    __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
 }
 
 bool XenomaiConditionVariable::wait()
 {
     MsgType buffer[NUM_ELEMENTS];
     // If notify was called multiple times, we read them all in one go
-    auto ret = read(_file, &buffer, sizeof(MsgType));
+    auto ret = read(_file, &buffer, sizeof(buffer));
     return ret > 0;
 }
 
@@ -159,7 +159,7 @@ void XenomaiConditionVariable::_set_up_socket()
     }
 
     size_t pool_size = NUM_ELEMENTS * sizeof(MsgType);
-    __cobalt_setsockopt(_socket_handle, SOL_XDDP, XDDP_POOLSZ, &pool_size, sizeof(pool_size));
+    __cobalt_setsockopt(_socket_handle, SOL_XDDP, XDDP_BUFSZ, &pool_size, sizeof(pool_size));
 
     memset(&_socket_address, 0, sizeof(_socket_address));
     _socket_address.sipc_family = AF_RTIPC;
