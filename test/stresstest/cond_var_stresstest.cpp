@@ -8,7 +8,6 @@
 
 #include <getopt.h>
 #include <sys/mman.h>
-//#include <xmmintrin.h>
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -128,7 +128,7 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
     int iters = DEFAULT_ITERATIONS;
     bool xenomai = false;
     bool print_timings = false;
-    char c;
+    signed char c;
 
     while ((c = getopt(argc, argv, "w:c:i:xt")) != -1)
     {

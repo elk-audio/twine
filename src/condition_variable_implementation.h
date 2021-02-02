@@ -67,7 +67,7 @@ bool PosixConditionVariable::wait()
 }
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-using MsgType = int;
+using MsgType = uint8_t;
 
 constexpr size_t NUM_ELEMENTS = 64;
 
@@ -101,17 +101,20 @@ private:
  * number of rtp file descriptors enabled in the the xenomai kernel.
  * It is set with CONFIG_XENO_OPT_PIPE_NRDEV, pass the same value
  * to twine when building for xenomai */
+
 constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
-static std::array<bool, MAX_XENOMAI_DEVICES> available_ids;
+
+// Note, static variables are always zero initialized
+static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
 static std::mutex mutex;
 
 int get_next_id()
 {
-    for (auto i = 0u; i < available_ids.size(); ++i)
+    for (auto i = 0u; i < active_ids.size(); ++i)
     {
-        if (available_ids[i] == false)
+        if (active_ids[i] == false)
         {
-            available_ids[i] = true;
+            active_ids[i] = true;
             return i;
         }
     }
@@ -122,7 +125,7 @@ void deregister_id(int id)
 {
     assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
     std::unique_lock<std::mutex> lock(mutex);
-    available_ids[id] = false;
+    active_ids[id] = false;
 }
 
 XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
