@@ -7,7 +7,6 @@
 
 #include <getopt.h>
 #include <sys/mman.h>
-#include <xmmintrin.h>
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -48,10 +47,6 @@ using AudioBuffer = std::array<float, 128>;
 using FilterRegister = std::array<float, 2>;
 using TimeStamp = std::chrono::nanoseconds;
 
-inline void set_flush_denormals_to_zero()
-{
-    _mm_setcsr(0x9FC0);
-}
 
 /* Biquad implementation to keep the cpu busy */
 template <size_t length>
@@ -133,7 +128,7 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
     int iters = DEFAULT_ITERATIONS;
     bool xenomai = false;
     bool print_timings = false;
-    char c;
+    signed char c;
 
     while ((c = getopt(argc, argv, "w:c:i:xt")) != -1)
     {
@@ -230,7 +225,7 @@ void print_iterations(int iter, bool xenomai)
 
 void* run_stress_test(void* data)
 {
-    set_flush_denormals_to_zero();
+    twine::set_flush_denormals_to_zero();
     auto [pool, process_data, iters, xenomai, timings] = *(reinterpret_cast<std::tuple<twine::WorkerPool*, const std::vector<ProcessData>*, int, bool, bool>*>(data));
     for (int i = 0; i < iters; ++i)
     {

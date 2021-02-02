@@ -91,5 +91,4 @@ inline int __cobalt_clock_gettime([[maybe_unused]] clockid_t clock_id, struct ti
     return 0;
 }
 
-
 #endif //TWINE_XENOMAI_STUBS_H
