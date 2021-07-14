@@ -32,6 +32,11 @@ endif()
 #  Generate build information    #
 ##################################
 
+# Set version
+set(TWINE_VERSION_MAJOR 0)
+set(TWINE_VERSION_MINOR 2)
+set(TWINE_VERSION_REVISION 0)
+
 # Get the latest commit hash of the working branch
 execute_process(
         COMMAND git log -1 --format=%H
@@ -112,7 +117,7 @@ endif()
 #  Install  #
 #############
 
-SET_TARGET_PROPERTIES(twine PROPERTIES VERSION 0.1)
+set_target_properties(twine PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
 set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 
 install(TARGETS twine

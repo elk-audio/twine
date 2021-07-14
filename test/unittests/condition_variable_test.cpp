@@ -42,7 +42,7 @@ TEST_F(RtConditionVariableTest, FunctionalityTest)
 
     ASSERT_FALSE(flag);
     _module_under_test->notify();
-    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
     ASSERT_TRUE(flag);
     thread.join();
