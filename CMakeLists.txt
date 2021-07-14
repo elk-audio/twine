@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.8)
-project(twine)
+
+# Set twine library version - Don't change anywhere else. Everything is generated from this.
+set(TWINE_VERSION_MAJOR 0)
+set(TWINE_VERSION_MINOR 2)
+set(TWINE_VERSION_REVISION 0)
+
+project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION})
 
 ########################
 #  Build Options       #
@@ -31,11 +37,6 @@ endif()
 ##################################
 #  Generate build information    #
 ##################################
-
-# Set version
-set(TWINE_VERSION_MAJOR 0)
-set(TWINE_VERSION_MINOR 2)
-set(TWINE_VERSION_REVISION 0)
 
 # Get the latest commit hash of the working branch
 execute_process(
