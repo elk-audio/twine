@@ -18,7 +18,9 @@ add_executable(unit_tests unittests/twine_tests.cpp
 
 target_include_directories(unit_tests PRIVATE  ${PROJECT_SOURCE_DIR}/include
                                                ${PROJECT_SOURCE_DIR}/src
-                                               ${PROJECT_SOURCE_DIR}/test/gtest/include)
+                                               ${PROJECT_SOURCE_DIR}/test/gtest/include
+                                               ${CMAKE_BINARY_DIR}/generated)
+
 
 target_link_libraries(unit_tests gtest gtest_main twine)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -19,6 +19,25 @@
 #include <chrono>
 
 namespace twine {
+
+struct VersionInfo
+{
+    int major;
+    int minor;
+    int revision;
+};
+
+/**
+ * @brief Query the current version of the library
+ * @return A VersionInfo struct with the major, minor and rev number of the library
+ */
+VersionInfo twine_version();
+
+/**
+ * @brief Query the build date and commit info
+ * @return A string containing build time, date and git commit number.
+ */
+const char* build_info();
 
 /**
  * @brief Function to determine the realtime processing state of the current thread
