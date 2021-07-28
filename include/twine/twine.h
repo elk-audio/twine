@@ -115,7 +115,7 @@ public:
     /**
      * @brief Call from a realtime thread to notify a non-rt thread to wake up.
      */
-    virtual void notify() = 0;
+    virtual bool notify() = 0;
 
     /**
      * @brief Blocks until notify() is called from a realtime thread. Call from a non-rt

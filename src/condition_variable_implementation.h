@@ -25,6 +25,7 @@
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #include <cobalt/sys/socket.h>
 #include <rtdm/ipc.h>
+#include <sched.h>
 #endif
 
 #include "twine/twine.h"
@@ -40,7 +41,7 @@ class PosixConditionVariable : public RtConditionVariable
 public:
     ~PosixConditionVariable() override = default;
 
-    void notify() override;
+    bool notify() override;
 
     bool wait() override;
 
@@ -50,11 +51,12 @@ private:
     std::condition_variable _cond_var;
 };
 
-void PosixConditionVariable::notify()
+bool PosixConditionVariable::notify()
 {
     std::unique_lock<std::mutex> lock(_mutex);
     _flag = true;
     _cond_var.notify_one();
+    return _flag;
 }
 
 bool PosixConditionVariable::wait()
@@ -82,13 +84,14 @@ public:
 
     virtual ~XenomaiConditionVariable() override;
 
-    void notify() override;
+    bool notify() override;
 
     bool wait() override;
 
 private:
     void _set_up_socket();
     void _set_up_file();
+    int  _get_sched_policy();
 
     std::string  _socket_name;
     sockaddr_ipc _socket_address;
@@ -139,17 +142,49 @@ XenomaiConditionVariable::~XenomaiConditionVariable()
     deregister_id(_id);
 }
 
-void XenomaiConditionVariable::notify()
+int XenomaiConditionVariable::_get_sched_policy()
+{
+    int policy;
+    pthread_t self = pthread_self();
+    struct sched_param param;
+    __cobalt_pthread_getschedparam(self, &policy, &param);
+    return policy;
+}
+
+bool XenomaiConditionVariable::notify()
 {
     MsgType data = 1;
-    __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
+    int ret = 0;
+    int policy = _get_sched_policy();
+
+    if (policy == SCHED_FIFO)
+    {
+        ret = __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
+    }
+    else
+    {
+        ret = write(_file, &data, sizeof(data));
+    }
+    return ret > 0;
 }
 
 bool XenomaiConditionVariable::wait()
 {
     MsgType buffer[NUM_ELEMENTS];
-    // If notify was called multiple times, we read them all in one go
-    auto ret = read(_file, &buffer, sizeof(buffer));
+    int ret = 0;
+    int policy = _get_sched_policy();
+
+    if (policy == SCHED_FIFO)
+    {
+        // use recvfrom when in a xenomai real-time thread
+        ret = __cobalt_recvfrom(_socket_handle, buffer, sizeof(buffer), 0, NULL, 0);
+    }
+    else
+    {
+        // If notify was called multiple times, we read them all in one go
+        ret = read(_file, &buffer, sizeof(buffer));
+    }
+
     return ret > 0;
 }
 
@@ -178,7 +213,7 @@ void XenomaiConditionVariable::_set_up_socket()
 void XenomaiConditionVariable::_set_up_file()
 {
     _socket_name = "/dev/rtp" + std::to_string(_id);
-    _file = open(_socket_name.c_str(), O_RDONLY);
+    _file = open(_socket_name.c_str(), O_RDWR);
     if (_file <= 0)
     {
         throw std::runtime_error(strerror(errno));
