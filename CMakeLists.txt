@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.8)
-project(twine)
+
+# Set twine library version - Don't change anywhere else. Everything is generated from this.
+set(TWINE_VERSION_MAJOR 0)
+set(TWINE_VERSION_MINOR 2)
+set(TWINE_VERSION_REVISION 0)
+
+project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION})
 
 ########################
 #  Build Options       #
@@ -27,6 +33,25 @@ if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
     set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
     message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
 endif()
+
+##################################
+#  Generate build information    #
+##################################
+
+# Get the latest commit hash of the working branch
+execute_process(
+        COMMAND git log -1 --format=%H
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M")
+
+configure_file(
+        ${CMAKE_SOURCE_DIR}/src/twine_version.h.in
+        ${CMAKE_BINARY_DIR}/generated/twine_version.h
+)
 
 #######################
 #  Utility functions  #
@@ -68,6 +93,7 @@ set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
 add_library(twine SHARED ${SOURCE_FILES})
 
+target_include_directories(twine PRIVATE ${CMAKE_BINARY_DIR}/generated)
 target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(twine PRIVATE pthread)
 
@@ -92,7 +118,7 @@ endif()
 #  Install  #
 #############
 
-SET_TARGET_PROPERTIES(twine PROPERTIES VERSION 0.1)
+set_target_properties(twine PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
 set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 
 install(TARGETS twine

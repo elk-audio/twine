@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -14,7 +14,7 @@
 
 /**
  * @brief Twine main source file
- * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ * @copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
  */
 
 #ifdef __SSE__
@@ -36,6 +36,7 @@
 
 #include "twine/twine.h"
 #include "twine_internal.h"
+#include "twine_version.h"
 #include "worker_pool_implementation.h"
 #include "condition_variable_implementation.h"
 
@@ -46,6 +47,21 @@ constexpr int64_t NS_TO_S = 1'000'000'000;
 thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
 static XenomaiRtFlag running_xenomai_realtime;
+
+#define _STRINGIZE(X) #X
+#define STRINGIZE(X) _STRINGIZE(X)
+
+VersionInfo twine_version()
+{
+    return {TWINE__VERSION_MAJ, TWINE__VERSION_MIN, TWINE__VERSION_REV};
+}
+
+const char* build_info()
+{
+    return "Twine - version " STRINGIZE(TWINE__VERSION_MAJ) "." STRINGIZE(TWINE__VERSION_MIN) "." STRINGIZE(TWINE__VERSION_REV)
+    ", built on " STRINGIZE(TWINE_BUILD_TIMESTAMP) " from commit: " STRINGIZE(TWINE_GIT_COMMIT_HASH);
+
+}
 
 bool is_current_thread_realtime()
 {
