@@ -210,9 +210,9 @@ public:
         }
     }
 
-    int run(int cpu_id)
+    int run(int sched_priority, int cpu_id)
     {
-        struct sched_param rt_params = {.sched_priority = 75};
+        struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
 
@@ -276,6 +276,7 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
     explicit WorkerPoolImpl(int cores, bool disable_denormals) : _no_cores(cores),
+                                                                 _cores_usage(cores, 0),
                                                                  _disable_denormals(disable_denormals)
     {}
 
@@ -286,13 +287,37 @@ public:
         _barrier.release_all();
     }
 
-    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void*worker_data) override
+    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
+                                int sched_priority=75,
+                                std::optional<int> cpu_id=std::nullopt) override
     {
         auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, _disable_denormals);
         _barrier.set_no_threads(_no_workers + 1);
-        // round-robin assignment to cpu cores
-        int core = (_no_workers + 1) % _no_cores;
-        auto res = errno_to_worker_status(worker->run(core));
+
+        int core = 0;
+        if (cpu_id.has_value())
+        {
+            core = cpu_id.value();
+        }
+        else
+        {
+            // If no core is specified, pick the first core with least usage
+            int min_idx = _no_cores - 1;
+            int min_usage = _cores_usage[min_idx];
+            for (int n = _no_cores-1; n >= 0; n--)
+            {
+                int cur_usage = _cores_usage[n];
+                if (cur_usage <= min_usage)
+                {
+                    min_usage = cur_usage;
+                    min_idx = n;
+                }
+            }
+            core = min_idx;
+        }
+        _cores_usage[core]++;
+
+        auto res = errno_to_worker_status(worker->run(sched_priority, core));
         if (res == WorkerPoolStatus::OK)
         {
             // Wait until the thread is idle to avoid synchronisation issues
@@ -321,6 +346,7 @@ private:
     std::atomic_bool            _running{true};
     int                         _no_workers{0};
     int                         _no_cores;
+    std::vector<int>            _cores_usage;
     bool                        _disable_denormals;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
