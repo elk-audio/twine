@@ -47,6 +47,9 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
         case EPERM:
             return WorkerPoolStatus::PERMISSION_DENIED;
 
+        case EINVAL:
+            return WorkerPoolStatus::INVALID_ARGUMENTS;
+
         default:
             return WorkerPoolStatus::ERROR;
     }
@@ -212,6 +215,10 @@ public:
 
     int run(int sched_priority, int cpu_id)
     {
+        if ( (sched_priority < 0) || (sched_priority > 100) )
+        {
+            return EINVAL;
+        }
         _priority = sched_priority;
         struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;

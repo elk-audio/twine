@@ -43,7 +43,8 @@ enum class WorkerPoolStatus
     OK,
     ERROR,
     PERMISSION_DENIED,
-    LIMIT_EXCEEDED
+    LIMIT_EXCEEDED,
+    INVALID_ARGUMENTS
 };
 
 /**

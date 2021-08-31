@@ -108,6 +108,14 @@ TEST_F(PthreadWorkerPoolTest, TestSetPriority)
     ASSERT_EQ(rt_params.sched_priority, TEST_SCHED_PRIO_1);
 }
 
+TEST_F(PthreadWorkerPoolTest, TestWrongPriority)
+{
+    auto res = _module_under_test.add_worker(worker_function, nullptr, -17);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+    res = _module_under_test.add_worker(worker_function, nullptr, 102);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+}
+
 
 TEST_F(PthreadWorkerPoolTest, TestAutomaticAffinity)
 {
