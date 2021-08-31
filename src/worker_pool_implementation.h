@@ -212,6 +212,7 @@ public:
 
     int run(int sched_priority, int cpu_id)
     {
+        _priority = sched_priority;
         struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
@@ -267,6 +268,7 @@ private:
     void*                       _callback_data;
     const std::atomic_bool&     _running;
     bool                        _disable_denormals;
+    int                         _priority {0};
 };
 
 template <ThreadType type>
