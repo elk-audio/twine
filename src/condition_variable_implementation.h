@@ -146,6 +146,7 @@ XenomaiConditionVariable::~XenomaiConditionVariable()
 {
     close(_rt_file);
     close(_non_rt_file);
+    __cobalt_close(_socket_handle);
     deregister_id(_id);
 }
 
