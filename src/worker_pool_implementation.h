@@ -65,10 +65,9 @@ public:
      */
     BarrierWithTrigger()
     {
-        mutex_create<type>(&_thread_mutex, nullptr);
         mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_thread_cond, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
+        semaphore_create<type>(&_semaphore);
     }
 
     /**
@@ -76,10 +75,9 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        mutex_destroy<type>(&_thread_mutex);
         mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_thread_cond);
         condition_var_destroy<type>(&_calling_cond);
+        semaphore_destroy<type>(&_semaphore);
     }
 
     /**
@@ -96,13 +94,11 @@ public:
         }
         mutex_unlock<type>(&_calling_mutex);
 
-        mutex_lock<type>(&_thread_mutex);
         while (halt_flag)
         {
-            // The condition needs to be rechecked when waking as threads may wake up spuriously
-            condition_wait<type>(&_thread_cond, &_thread_mutex);
+            //The condition needs to be rechecked when waking as threads may wake up spuriously
+            semaphore_wait<type>(&_semaphore);
         }
-        mutex_unlock<type>(&_thread_mutex);
     }
 
     /**
@@ -114,6 +110,8 @@ public:
     {
         mutex_lock<type>(&_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
+        int threads = -200;
+        int res = sem_getvalue(&_semaphore, &threads);
         if (current_threads == _no_threads)
         {
             mutex_unlock<type>(&_calling_mutex);
@@ -147,14 +145,39 @@ public:
         assert(_no_threads_currently_on_barrier == _no_threads);
         _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
-        /* For xenomai threads, it is neccesary to hold the mutex while
-         * sending the broadcast. Otherwise deadlocks can occur. For
-         * pthreads it is not neccesary but it is recommended for
-         * good realtime performance. And surprisingly enough seems
-         * a bit faster that without holding the mutex.  */
-        mutex_lock<type>(&_thread_mutex);
-        condition_broadcast<type>(&_thread_cond);
-        mutex_unlock<type>(&_thread_mutex);
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(&_semaphore);
+        }
+        mutex_unlock<type>(&_calling_mutex);
+    }
+
+    void release_and_wait()
+    {
+        mutex_lock<type>(&_calling_mutex);
+        assert(_no_threads_currently_on_barrier == _no_threads);
+        _swap_halt_flags();
+        _no_threads_currently_on_barrier = 0;
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(&_semaphore);
+        }
+
+        int current_threads = _no_threads_currently_on_barrier;
+        int threads = -200;
+        int res = sem_getvalue(&_semaphore, &threads);
+        if (current_threads == _no_threads)
+        {
+            mutex_unlock<type>(&_calling_mutex);
+            return;
+        }
+        while (current_threads < _no_threads)
+        {
+            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            current_threads = _no_threads_currently_on_barrier;
+        }
         mutex_unlock<type>(&_calling_mutex);
     }
 
@@ -174,15 +197,15 @@ private:
         *_halt_flag = true;
     }
 
-    pthread_mutex_t _thread_mutex;
-    pthread_mutex_t _calling_mutex;
+    alignas(32) sem_t _semaphore;
+    alignas(32) pthread_mutex_t _calling_mutex;
 
-    pthread_cond_t _thread_cond;
     pthread_cond_t _calling_cond;
 
     std::array<bool, 2> _halt_flags{true, true};
     bool*_halt_flag{&_halt_flags[0]};
     int _no_threads_currently_on_barrier{0};
+
     int _no_threads{0};
 };
 
@@ -309,12 +332,13 @@ public:
 
     void wait_for_workers_idle() override
     {
-        _barrier.wait_for_all();
+        //_barrier.wait_for_all();
     }
 
     void wakeup_workers() override
     {
-        _barrier.release_all();
+        //_barrier.release_all();
+        _barrier.release_and_wait();
     }
 
 private:

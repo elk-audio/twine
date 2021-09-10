@@ -72,12 +72,26 @@ struct ProcessData
 void worker_function(void* data)
 {
     auto process_data = reinterpret_cast<ProcessData*>(data);
+<<<<<<< Updated upstream
     process_data->start_time = twine::current_rt_time();
+=======
+    auto start_time = twine::current_rt_time();
+
+    //std::atomic_thread_fence(std::memory_order_release);
+
+>>>>>>> Stashed changes
     int iters = MAX_LOAD;
     for (int i = 0; i < iters; ++i)
     {
         process_filter(process_data->buffer, process_data->mem);
     }
+<<<<<<< Updated upstream
+=======
+
+    //std::atomic_thread_fence(std::memory_order_release);
+
+    process_data->start_time = start_time;
+>>>>>>> Stashed changes
     process_data->end_time = twine::current_rt_time();
 }
 
@@ -232,6 +246,8 @@ void* run_stress_test(void* data)
         auto start_time = twine::current_rt_time();
         // Run all workers
         pool->wakeup_workers();
+        pool->wait_for_workers_idle();
+
         auto end_time = twine::current_rt_time();
         if ((i + 1) % 10 == 0)
         {
@@ -242,7 +258,7 @@ void* run_stress_test(void* data)
             if (xenomai)
             {
 #ifdef TWINE_BUILD_WITH_XENOMAI
-                /* Since xenomai runs with realtime priority, we can't max out cpu usage as
+                 /* Since xenomai runs with realtime priority, we can't max out cpu usage as
                  * that would starve the linux kernel, so we leave a time slice for it here */
                 timespec t;
                 t.tv_sec = 0;
@@ -255,7 +271,6 @@ void* run_stress_test(void* data)
         {
             print_timings(process_data, i, xenomai, start_time, end_time);
         }
-        pool->wait_for_workers_idle();
     }
     return nullptr;
 }
