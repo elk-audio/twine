@@ -82,7 +82,9 @@ int rt_printf(const char *format, ...)
 
 void init_xenomai()
 {
+#ifdef TWINE_BUILD_WITH_XENOMAI
     running_xenomai_realtime.set(true);
+#endif
 }
 
 std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disable_denormals)
