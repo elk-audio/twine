@@ -22,12 +22,14 @@
 #include <cstring>
 #include <cassert>
 
-#ifdef TWINE_BUILD_WITH_XENOMAI
-#include <cobalt/sys/socket.h>
-#include <rtdm/ipc.h>
-#endif
+#include "twine_internal.h"
 
-#include "twine/twine.h"
+#ifdef TWINE_BUILD_WITH_XENOMAI
+#include <poll.h>
+#include <sys/eventfd.h>
+#include <rtdm/ipc.h>
+#include <cobalt/sys/socket.h>
+#endif
 
 namespace twine {
 
@@ -68,8 +70,10 @@ bool PosixConditionVariable::wait()
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
 using MsgType = uint8_t;
+using NonRTMsgType = uint64_t;
 
 constexpr size_t NUM_ELEMENTS = 64;
+constexpr int INFINITE_POLL_TIME = -1;
 
 /**
  * @brief Implementation using xenomai xddp queues that allow signalling a
@@ -88,13 +92,17 @@ public:
 
 private:
     void _set_up_socket();
-    void _set_up_file();
+    void _set_up_files();
 
     std::string  _socket_name;
     sockaddr_ipc _socket_address;
     int          _socket_handle{0};
-    int          _file{0};
+
+    int          _rt_file{0};
+    int          _non_rt_file{0};
     int          _id{0};
+
+    std::array<pollfd, 2> _poll_targets;
 };
 
 /* The maximum number of condition variable instances depend on the
@@ -104,7 +112,7 @@ private:
 
 constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
 
-// Note, static variables are always zero initialized
+// Note, static variables are guaranteed to be zero initialized
 static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
 static std::mutex mutex;
 
@@ -131,26 +139,50 @@ void deregister_id(int id)
 XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
 {
     _set_up_socket();
-    _set_up_file();
+    _set_up_files();
 }
 
 XenomaiConditionVariable::~XenomaiConditionVariable()
 {
+    close(_rt_file);
+    close(_non_rt_file);
+    __cobalt_close(_socket_handle);
     deregister_id(_id);
 }
 
 void XenomaiConditionVariable::notify()
 {
-    MsgType data = 1;
-    __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
+    if (ThreadRtFlag::is_realtime())
+    {
+        MsgType data = 1;
+        __cobalt_sendto(_socket_handle, &data, sizeof(data), MSG_MORE, nullptr, 0);
+    }
+    else
+    {
+        // Linux EventFDs requires 8 bytes of data
+        NonRTMsgType data = 1;
+        write(_non_rt_file, &data, sizeof(data));
+    }
 }
 
 bool XenomaiConditionVariable::wait()
 {
     MsgType buffer[NUM_ELEMENTS];
-    // If notify was called multiple times, we read them all in one go
-    auto ret = read(_file, &buffer, sizeof(buffer));
-    return ret > 0;
+    poll(_poll_targets.data(), _poll_targets.size(), INFINITE_POLL_TIME);
+
+    int len = 0;
+
+    // drain file descriptors.
+    for (auto& t : _poll_targets)
+    {
+        if (t.revents != 0)
+        {
+            len += read(t.fd, &buffer, sizeof(buffer));
+            t.revents = 0;
+        }
+    }
+
+    return len > 1;
 }
 
 void XenomaiConditionVariable::_set_up_socket()
@@ -175,14 +207,23 @@ void XenomaiConditionVariable::_set_up_socket()
     }
 }
 
-void XenomaiConditionVariable::_set_up_file()
+void XenomaiConditionVariable::_set_up_files()
 {
     _socket_name = "/dev/rtp" + std::to_string(_id);
-    _file = open(_socket_name.c_str(), O_RDONLY);
-    if (_file <= 0)
+    _non_rt_file = eventfd(0, EFD_SEMAPHORE);
+    if (_non_rt_file <= 0)
     {
         throw std::runtime_error(strerror(errno));
     }
+
+    _rt_file = open(_socket_name.c_str(), O_RDWR | O_NONBLOCK);
+    if (_rt_file <= 0)
+    {
+        throw std::runtime_error(strerror(errno));
+    }
+
+    _poll_targets[0] = {.fd = _rt_file, .events = POLLIN, .revents = 0};
+    _poll_targets[1] = {.fd = _non_rt_file, .events = POLLIN, .revents = 0};
 }
 
 #endif
