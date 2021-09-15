@@ -84,6 +84,9 @@ struct ProcessData
 
     TimeStats total;
     TimeStats start;
+
+    int count{0};
+    int id{0};
 };
 
 void worker_function(void* data)
@@ -91,18 +94,16 @@ void worker_function(void* data)
     auto process_data = reinterpret_cast<ProcessData*>(data);
     auto start_time = twine::current_rt_time();
 
-    std::atomic_thread_fence(std::memory_order_release);
-
     int iters = MAX_LOAD;
     for (int i = 0; i < iters; ++i)
     {
         process_filter(process_data->buffer, process_data->mem);
     }
 
-    std::atomic_thread_fence(std::memory_order_release);
-
     process_data->start_time = start_time;
     process_data->end_time = twine::current_rt_time();
+
+    process_data->count++;
 }
 
 std::string to_error_string(twine::WorkerPoolStatus status)
@@ -283,8 +284,7 @@ void* run_stress_test(void* data)
         auto start_time = twine::current_rt_time();
 
         // Run all workers
-        pool->wakeup_workers();
-        pool->wait_for_workers_idle();
+        pool->wakeup_and_wait();
 
         auto end_time = twine::current_rt_time();
         if ((i + 1) % 10 == 0)
@@ -350,6 +350,7 @@ int main(int argc, char **argv)
     {
         ProcessData d;
         d.mem = {0,0};
+        d.id = i;
         for (auto& b : d.buffer)
         {
             b = dist(gen);

@@ -67,7 +67,9 @@ public:
     {
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        semaphore_create<type>(&_semaphore);
+        semaphore_create<type>(&_semaphores[0]);
+        semaphore_create<type>(&_semaphores[1]);
+        _active_sem = &_semaphores[0];
     }
 
     /**
@@ -77,7 +79,8 @@ public:
     {
         mutex_destroy<type>(&_calling_mutex);
         condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(&_semaphore);
+        semaphore_destroy<type>(&_semaphores[0]);
+        semaphore_destroy<type>(&_semaphores[1]);
     }
 
     /**
@@ -86,19 +89,15 @@ public:
      */
     void wait()
     {
-        const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
         mutex_lock<type>(&_calling_mutex);
+        auto active_sem = _active_sem;
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
             condition_signal<type>(&_calling_cond);
         }
         mutex_unlock<type>(&_calling_mutex);
 
-        while (halt_flag)
-        {
-            //The condition needs to be rechecked when waking as threads may wake up spuriously
-            semaphore_wait<type>(&_semaphore);
-        }
+        semaphore_wait<type>(active_sem);
     }
 
     /**
@@ -110,8 +109,7 @@ public:
     {
         mutex_lock<type>(&_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
-        int threads = -200;
-        int res = sem_getvalue(&_semaphore, &threads);
+
         if (current_threads == _no_threads)
         {
             mutex_unlock<type>(&_calling_mutex);
@@ -142,14 +140,18 @@ public:
     void release_all()
     {
         mutex_lock<type>(&_calling_mutex);
+
         assert(_no_threads_currently_on_barrier == _no_threads);
-        _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(&_semaphore);
+            semaphore_signal<type>(prev_sem);
         }
+
         mutex_unlock<type>(&_calling_mutex);
     }
 
@@ -157,22 +159,18 @@ public:
     {
         mutex_lock<type>(&_calling_mutex);
         assert(_no_threads_currently_on_barrier == _no_threads);
-        _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(&_semaphore);
+            semaphore_signal<type>(prev_sem);
         }
 
         int current_threads = _no_threads_currently_on_barrier;
-        int threads = -200;
-        int res = sem_getvalue(&_semaphore, &threads);
-        if (current_threads == _no_threads)
-        {
-            mutex_unlock<type>(&_calling_mutex);
-            return;
-        }
+
         while (current_threads < _no_threads)
         {
             condition_wait<type>(&_calling_cond, &_calling_mutex);
@@ -183,30 +181,26 @@ public:
 
 
 private:
-    void _swap_halt_flags()
+    void _swap_semaphores()
     {
-        *_halt_flag = false;
-        if (_halt_flag == &_halt_flags[0])
+        if (_active_sem == &_semaphores[0])
         {
-            _halt_flag = &_halt_flag[1];
+            _active_sem = &_semaphores[1];
         }
         else
         {
-            _halt_flag = &_halt_flags[0];
+            _active_sem = &_semaphores[0];
         }
-        *_halt_flag = true;
     }
 
-    alignas(32) sem_t _semaphore;
-    alignas(32) pthread_mutex_t _calling_mutex;
+    std::array<sem_t, 2> _semaphores;
+    sem_t* _active_sem;
 
-    pthread_cond_t _calling_cond;
+    pthread_mutex_t _calling_mutex;
+    pthread_cond_t  _calling_cond;
 
-    std::array<bool, 2> _halt_flags{true, true};
-    bool*_halt_flag{&_halt_flags[0]};
-    int _no_threads_currently_on_barrier{0};
-
-    int _no_threads{0};
+    std::atomic<int> _no_threads_currently_on_barrier{0};
+    std::atomic<int> _no_threads{0};
 };
 
 template <ThreadType type>
@@ -332,12 +326,16 @@ public:
 
     void wait_for_workers_idle() override
     {
-        //_barrier.wait_for_all();
+        _barrier.wait_for_all();
     }
 
     void wakeup_workers() override
     {
-        //_barrier.release_all();
+        _barrier.release_all();
+    }
+
+    void wakeup_and_wait() override
+    {
         _barrier.release_and_wait();
     }
 

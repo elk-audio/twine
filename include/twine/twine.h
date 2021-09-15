@@ -103,11 +103,17 @@ public:
     virtual void wait_for_workers_idle() = 0;
 
     /**
-     * @brief After calling, all workers will be signaled to run and will call their
-     *        respective callback functions in an unspecified order. The call will block
-     *        until all workers have finished and returned to idle.
+     * @brief Signal all workers to run call their respective callback functions in
+     *        an unspecified order. The call will not block until all workers have finished.
      */
     virtual void wakeup_workers() = 0;
+
+    /**
+     * @brief Signal all workers to run call their respective callback functions in
+     *        an unspecified order and block until all workers have finished in a
+     *        single atomic operation.
+     */
+    virtual void wakeup_and_wait() = 0;
 
 protected:
     WorkerPool() = default;
