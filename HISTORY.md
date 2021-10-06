@@ -1,3 +1,8 @@
+## 0.2.1
+
+Fixes:
+  * CMake include folders when used as a library
+
 ## 0.2.0
 
 New Features:
