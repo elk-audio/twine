@@ -161,7 +161,7 @@ void XenomaiConditionVariable::notify()
     {
         // Linux EventFDs requires 8 bytes of data
         NonRTMsgType data = 1;
-        write(_non_rt_file, &data, sizeof(data));
+        [[maybe_unused]] auto unused = write(_non_rt_file, &data, sizeof(data));
     }
 }
 
