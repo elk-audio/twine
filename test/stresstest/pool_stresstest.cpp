@@ -61,24 +61,49 @@ void process_filter(std::array<float, length>& buffer, FilterRegister& mem)
     }
 }
 
+struct TimeStats
+{
+    TimeStamp min_time{std::numeric_limits<int64_t>::max()};
+    TimeStamp max_time{0};
+    TimeStamp mean_time{0};
+};
+
+void update_stats(TimeStats& data, TimeStamp new_time)
+{
+    data.min_time = std::min(data.min_time, new_time);
+    data.max_time = std::max(data.max_time, new_time);
+    data.mean_time = (data.mean_time * 99 + new_time) / 100;
+}
+
 struct ProcessData
 {
     AudioBuffer buffer;
     FilterRegister mem;
-    TimeStamp start_time;
-    TimeStamp end_time;
+    TimeStamp start_time{0};
+    TimeStamp end_time{0};
+
+    TimeStats total;
+    TimeStats start;
+
+    int count{0};
+    int id{0};
 };
 
 void worker_function(void* data)
 {
     auto process_data = reinterpret_cast<ProcessData*>(data);
-    process_data->start_time = twine::current_rt_time();
+    auto start_time = twine::current_rt_time();
+
     int iters = MAX_LOAD;
     for (int i = 0; i < iters; ++i)
     {
         process_filter(process_data->buffer, process_data->mem);
     }
+
+    process_data->start_time = start_time;
     process_data->end_time = twine::current_rt_time();
+
+    process_data->count++;
 }
 
 std::string to_error_string(twine::WorkerPoolStatus status)
@@ -117,7 +142,9 @@ void xenomai_thread_init()
 #endif
 #ifndef TWINE_BUILD_WITH_XENOMAI
 void xenomai_thread_init()
-{ }
+{
+    std::cout << "Test not built with xenomai support!" << std::endl;
+}
 #endif
 
 
@@ -155,16 +182,18 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
                 break;
             case '?':
                 std::cout << "Options are: -w[n of worker threads], -c[n of cores], -i[n of iterations], -x - use xenomai threads, -t - print timings for each iteration" << std::endl;
-                [[fallthrough]]
+                abort();
+
             default:
                 abort();
         }
     }
-    return std::make_tuple(workers, cores, iters, xenomai, print_timings);
+    return std::make_tuple(workers, cores, iters, xenomai,
+                           print_timings);
 }
 
 
-void print_timings(const std::vector<ProcessData>* data, int iter, bool xenomai, TimeStamp start_time, TimeStamp end_time)
+void update_timings(std::vector<ProcessData>* data, int iter, bool xenomai, bool print, TimeStamp start_time, TimeStamp end_time)
 {
     static float min_time{10000000};
     static float max_time{0};
@@ -175,31 +204,40 @@ void print_timings(const std::vector<ProcessData>* data, int iter, bool xenomai,
     min_time = std::min(min_time, current_total);
     mean_time = (4.0f * mean_time + current_total) / 5;
 
-    if (xenomai)
+    if (print)
     {
-#ifdef TWINE_BUILD_WITH_XENOMAI
-        __cobalt_printf("Iteration: %i, total time: %.1f us, avg: %.1f us, min: %.1f us, max: %.1f us\n", iter, current_total, mean_time, min_time, max_time);
-#endif
-    }
-    else
-    {
-        std::cout << "Iteration: " << iter << ", total time: " << current_total << " us, avg: " << mean_time << " us, min: " << min_time << " us, max: "<< max_time << " us\n";
-    }
-    int id = 0;
-    for(const auto& w : *data)
-    {
-        TimeStamp process_time = (w.end_time - w.start_time) / 1000;
-        TimeStamp offset_time = (w.start_time - start_time) / 1000;
         if (xenomai)
         {
 #ifdef TWINE_BUILD_WITH_XENOMAI
-            __cobalt_printf("Worker: %i, start offset: %i us, total: %i us\n", id, offset_time.count(), process_time.count());
+            __cobalt_printf("Iteration %i: total time: %.1f us, avg: %.1f us, min: %.1f us, max: %.1f us\n", iter, current_total, mean_time, min_time, max_time);
 #endif
-        }
-        else
+        } else
         {
-            std::cout << "Worker: " << id << ", start offset: " << offset_time.count() << " us, total: " << process_time.count() << " us" << std::endl;
+            std::cout << "Iteration: " << iter << ", total time: " << current_total << " us, avg: " << mean_time
+                      << " us, min: " << min_time << " us, max: " << max_time << " us\n";
         }
+    }
+
+    int id = 0;
+    for(auto& w : *data)
+    {
+        auto process_time = std::chrono::duration_cast<std::chrono::microseconds>(w.end_time - w.start_time);
+        auto offset_time = std::chrono::duration_cast<std::chrono::microseconds>(w.start_time - start_time);
+        if (print)
+        {
+            if (xenomai)
+            {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+                __cobalt_printf("Worker %i: start offset: %i us, total: %i us\n", id, offset_time.count(), process_time.count());
+#endif
+            } else
+            {
+                std::cout << "Worker " << id << ": start offset: " << offset_time.count() << " us, total: "
+                          << process_time.count() << " us, " << std::endl;
+            }
+        }
+        update_stats(w.total, process_time);
+        update_stats(w.start, offset_time);
         id++;
     }
 
@@ -223,19 +261,35 @@ void print_iterations(int iter, bool xenomai)
     }
 }
 
+void print_final_stats(const std::vector<ProcessData>& data)
+{
+    for(unsigned int i = 0; i < data.size(); ++i)
+    {
+        const auto& w = data[i];
+        std::cout << "Worker " << i << ": Total time: avg: " << w.total.mean_time.count() / 1000.0  <<
+                                            " us, min: " << w.total.min_time.count() / 1000.0 <<
+                                            " us, max: " << w.total.max_time.count() / 1000.0 <<
+                                            " us;\t Thread start time: avg: " << w.start.mean_time.count() / 1000.0 <<
+                                            " us, min: " << w.start.min_time.count() / 1000.0 <<
+                                            " us, max: " << w.start.max_time.count() / 1000.0 << "us. " << std::endl;
+    }
+}
+
 void* run_stress_test(void* data)
 {
     twine::set_flush_denormals_to_zero();
-    auto [pool, process_data, iters, xenomai, timings] = *(reinterpret_cast<std::tuple<twine::WorkerPool*, const std::vector<ProcessData>*, int, bool, bool>*>(data));
+    auto [pool, process_data, iters, xenomai, print_timings] = *(reinterpret_cast<std::tuple<twine::WorkerPool*, std::vector<ProcessData>*, int, bool, bool>*>(data));
     for (int i = 0; i < iters; ++i)
     {
         auto start_time = twine::current_rt_time();
+
         // Run all workers
-        pool->wakeup_workers();
+        pool->wakeup_and_wait();
+
         auto end_time = twine::current_rt_time();
         if ((i + 1) % 10 == 0)
         {
-            if (!timings)
+            if (!print_timings)
             {
                 print_iterations(i, xenomai);
             }
@@ -251,16 +305,12 @@ void* run_stress_test(void* data)
 #endif
             }
         }
-        if (timings)
-        {
-            print_timings(process_data, i, xenomai, start_time, end_time);
-        }
-        pool->wait_for_workers_idle();
+        update_timings(process_data, i, xenomai, print_timings, start_time, end_time);
     }
     return nullptr;
 }
 
-void run_stress_test_in_xenomai_thread(void* data)
+void run_stress_test_in_xenomai_thread([[maybe_unused]] void* data)
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
         /* Threadpool must be controlled from another xenomai thread */
@@ -289,7 +339,7 @@ int main(int argc, char **argv)
     auto [workers, cores, iters, xenomai, timings] = parse_opts(argc, argv);
 
     std::vector<ProcessData> data;
-    data.reserve(DEFAULT_ITERATIONS);
+    data.reserve(workers);
     auto worker_pool = twine::WorkerPool::create_worker_pool(cores);
 
     std::random_device rd;
@@ -300,6 +350,7 @@ int main(int argc, char **argv)
     {
         ProcessData d;
         d.mem = {0,0};
+        d.id = i;
         for (auto& b : d.buffer)
         {
             b = dist(gen);
@@ -314,14 +365,19 @@ int main(int argc, char **argv)
         }
     }
     auto test_data = std::make_tuple(worker_pool.get(), &data, iters, xenomai, timings);
+
     if (xenomai)
     {
         run_stress_test_in_xenomai_thread(&test_data);
 
-    } else
+    }
+    else
     {
         run_stress_test(&test_data);
     }
+
+    std::cout << "\n" << iters << " iterations" << std::endl;
+    print_final_stats(data);
 
     return 0;
 }

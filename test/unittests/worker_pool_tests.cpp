@@ -8,20 +8,20 @@
 
 using namespace twine;
 
-void test_function(bool& running, bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))
+void test_function(std::atomic_bool& running, std::atomic_bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))
 {
     while (running)
     {
-         barrier.wait();
-         flag = true;
+        barrier.wait();
+        flag = true;
     }
 }
 
 TEST (BarrierTest, TestBarrierWithTrigger)
 {
-    bool a = false;
-    bool b = false;
-    bool running = true;
+    std::atomic_bool a = false;
+    std::atomic_bool b = false;
+    std::atomic_bool running = true;
 
     BarrierWithTrigger<ThreadType::PTHREAD> module_under_test;
     module_under_test.set_no_threads(2);
@@ -34,10 +34,16 @@ TEST (BarrierTest, TestBarrierWithTrigger)
 
     /* Run both threads and wait for them to stop at the barrier again */
     module_under_test.release_all();
-
     module_under_test.wait_for_all();
 
     /* Both flags should now be set to true */
+    ASSERT_TRUE(a);
+    ASSERT_TRUE(b);
+
+    /* Do it again with the single function release and wait */
+    a = false;
+    b = false;
+    module_under_test.release_and_wait();
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);
 

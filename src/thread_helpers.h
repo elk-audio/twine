@@ -23,10 +23,12 @@
 #include <cassert>
 
 #include <pthread.h>
+#include <semaphore.h>
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <cobalt/pthread.h>
+#include <cobalt/semaphore.h>
 #pragma GCC diagnostic pop
 #endif
 #ifndef TWINE_BUILD_WITH_XENOMAI
@@ -183,6 +185,58 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
     else if constexpr (type == ThreadType::XENOMAI)
     {
         return __cobalt_pthread_join(thread, return_var);
+    }
+}
+
+template<ThreadType type>
+inline int semaphore_create(sem_t* semaphore)
+{
+    if constexpr (type == ThreadType::PTHREAD)
+    {
+        return sem_init(semaphore, 0, 0);
+    }
+    else if constexpr (type == ThreadType::XENOMAI)
+    {
+        return __cobalt_sem_init(semaphore, 0, 0);
+    }
+}
+
+template<ThreadType type>
+inline int semaphore_destroy(sem_t* semaphore)
+{
+    if constexpr (type == ThreadType::PTHREAD)
+    {
+        return sem_destroy(semaphore);
+    }
+    else if constexpr (type == ThreadType::XENOMAI)
+    {
+        return __cobalt_sem_destroy(semaphore);
+    }
+}
+
+template<ThreadType type>
+inline int semaphore_wait(sem_t* semaphore)
+{
+    if constexpr (type == ThreadType::PTHREAD)
+    {
+        return sem_wait(semaphore);
+    }
+    else if constexpr (type == ThreadType::XENOMAI)
+    {
+        return __cobalt_sem_wait(semaphore);
+    }
+}
+
+template<ThreadType type>
+inline int semaphore_signal(sem_t* semaphore)
+{
+    if constexpr (type == ThreadType::PTHREAD)
+    {
+        return sem_post(semaphore);
+    }
+    else if constexpr (type == ThreadType::XENOMAI)
+    {
+        return __cobalt_sem_post(semaphore);
     }
 }
 
