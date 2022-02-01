@@ -1,0 +1,11 @@
+#ifndef __version_h__
+#define __version_h__
+
+#define TWINE__VERSION_MAJ  @TWINE_VERSION_MAJOR@
+#define TWINE__VERSION_MIN  @TWINE_VERSION_MINOR@
+#define TWINE__VERSION_REV  @TWINE_VERSION_REVISION@
+
+#define TWINE_GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
+#define TWINE_BUILD_TIMESTAMP "@BUILD_TIMESTAMP@"
+
+#endif // #ifndef __version_h__

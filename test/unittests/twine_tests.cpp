@@ -3,6 +3,7 @@
 #include "gtest/gtest.h"
 
 #include "twine.cpp"
+#include "twine_version.h"
 
 using namespace twine;
 
@@ -24,4 +25,13 @@ TEST (TwineTest, TestRtTimestamp)
     std::this_thread::sleep_for(std::chrono::microseconds(100));
     auto time_2 = current_rt_time();
     ASSERT_GT(time_2, time_1);
+}
+
+TEST (TwineTest, TestVersionAndBuildInfo)
+{
+    auto version = twine::twine_version();
+    EXPECT_EQ(TWINE__VERSION_MAJ, version.major);
+    EXPECT_EQ(TWINE__VERSION_MIN, version.minor);
+    EXPECT_EQ(TWINE__VERSION_REV, version.revision);
+    EXPECT_GT(strlen(twine::build_info()), 100u);
 }
