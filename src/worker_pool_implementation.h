@@ -68,10 +68,11 @@ public:
      */
     BarrierWithTrigger()
     {
-        mutex_create<type>(&_thread_mutex, nullptr);
         mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_thread_cond, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
+        semaphore_create<type>(&_semaphores[0]);
+        semaphore_create<type>(&_semaphores[1]);
+        _active_sem = &_semaphores[0];
     }
 
     /**
@@ -79,10 +80,10 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        mutex_destroy<type>(&_thread_mutex);
         mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_thread_cond);
         condition_var_destroy<type>(&_calling_cond);
+        semaphore_destroy<type>(&_semaphores[0]);
+        semaphore_destroy<type>(&_semaphores[1]);
     }
 
     /**
@@ -91,21 +92,15 @@ public:
      */
     void wait()
     {
-        const bool& halt_flag = *_halt_flag; // 'local' halt flag for this round
         mutex_lock<type>(&_calling_mutex);
+        auto active_sem = _active_sem;
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
             condition_signal<type>(&_calling_cond);
         }
         mutex_unlock<type>(&_calling_mutex);
 
-        mutex_lock<type>(&_thread_mutex);
-        while (halt_flag)
-        {
-            // The condition needs to be rechecked when waking as threads may wake up spuriously
-            condition_wait<type>(&_thread_cond, &_thread_mutex);
-        }
-        mutex_unlock<type>(&_thread_mutex);
+        semaphore_wait<type>(active_sem);
     }
 
     /**
@@ -117,6 +112,7 @@ public:
     {
         mutex_lock<type>(&_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
+
         if (current_threads == _no_threads)
         {
             mutex_unlock<type>(&_calling_mutex);
@@ -147,46 +143,67 @@ public:
     void release_all()
     {
         mutex_lock<type>(&_calling_mutex);
+
         assert(_no_threads_currently_on_barrier == _no_threads);
-        _swap_halt_flags();
         _no_threads_currently_on_barrier = 0;
-        /* For xenomai threads, it is neccesary to hold the mutex while
-         * sending the broadcast. Otherwise deadlocks can occur. For
-         * pthreads it is not neccesary but it is recommended for
-         * good realtime performance. And surprisingly enough seems
-         * a bit faster that without holding the mutex.  */
-        mutex_lock<type>(&_thread_mutex);
-        condition_broadcast<type>(&_thread_cond);
-        mutex_unlock<type>(&_thread_mutex);
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(prev_sem);
+        }
+
+        mutex_unlock<type>(&_calling_mutex);
+    }
+
+    void release_and_wait()
+    {
+        mutex_lock<type>(&_calling_mutex);
+        assert(_no_threads_currently_on_barrier == _no_threads);
+        _no_threads_currently_on_barrier = 0;
+
+        auto prev_sem = _active_sem;
+        _swap_semaphores();
+
+        for (int i = 0; i < _no_threads; ++i)
+        {
+            semaphore_signal<type>(prev_sem);
+        }
+
+        int current_threads = _no_threads_currently_on_barrier;
+
+        while (current_threads < _no_threads)
+        {
+            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            current_threads = _no_threads_currently_on_barrier;
+        }
         mutex_unlock<type>(&_calling_mutex);
     }
 
 
 private:
-    void _swap_halt_flags()
+    void _swap_semaphores()
     {
-        *_halt_flag = false;
-        if (_halt_flag == &_halt_flags[0])
+        if (_active_sem == &_semaphores[0])
         {
-            _halt_flag = &_halt_flag[1];
+            _active_sem = &_semaphores[1];
         }
         else
         {
-            _halt_flag = &_halt_flags[0];
+            _active_sem = &_semaphores[0];
         }
-        *_halt_flag = true;
     }
 
-    pthread_mutex_t _thread_mutex;
+    std::array<sem_t, 2> _semaphores;
+    sem_t* _active_sem;
+
     pthread_mutex_t _calling_mutex;
+    pthread_cond_t  _calling_cond;
 
-    pthread_cond_t _thread_cond;
-    pthread_cond_t _calling_cond;
-
-    std::array<bool, 2> _halt_flags{true, true};
-    bool*_halt_flag{&_halt_flags[0]};
-    int _no_threads_currently_on_barrier{0};
-    int _no_threads{0};
+    std::atomic<int> _no_threads_currently_on_barrier{0};
+    std::atomic<int> _no_threads{0};
 };
 
 template <ThreadType type>
@@ -349,6 +366,11 @@ public:
     void wakeup_workers() override
     {
         _barrier.release_all();
+    }
+
+    void wakeup_and_wait() override
+    {
+        _barrier.release_and_wait();
     }
 
 private:
