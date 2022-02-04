@@ -113,5 +113,11 @@ inline int __cobalt_sem_post([[maybe_unused]] sem_t* sem)
     return 0;
 }
 
+constexpr auto PTHREAD_WARNSW = 0;
+inline void pthread_setmode_np([[maybe_unused]] int clrmask,[[maybe_unused]] int setmask, [[maybe_unused]] int* mode_r)
+{
+    assert(false);
+}
+
 }
 #endif //TWINE_XENOMAI_STUBS_H
