@@ -246,8 +246,9 @@ public:
 #endif
         if (res == 0)
         {
-            return thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
         }
+        pthread_attr_destroy(&task_attributes);
         return res;
     }
 
