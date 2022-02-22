@@ -1,3 +1,10 @@
+## TBD
+New Features:
+  * Tread pool uses semaphores for better performance
+
+Fixes:
+  * Memory leak in thread attributes
+
 ## 0.2.1
 
 Fixes:
