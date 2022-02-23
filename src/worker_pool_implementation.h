@@ -34,6 +34,11 @@ namespace twine {
 
 void set_flush_denormals_to_zero();
 
+inline void enable_break_on_mode_sw()
+{
+    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+}
+
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
     switch (error)
@@ -179,7 +184,6 @@ public:
         mutex_unlock<type>(&_calling_mutex);
     }
 
-
 private:
     void _swap_semaphores()
     {
@@ -211,11 +215,13 @@ public:
 
     WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
                                          void*callback_data, std::atomic_bool& running_flag,
-                                         bool disable_denormals): _barrier(barrier),
+                                         bool disable_denormals,
+                                         bool break_on_mode_sw): _barrier(barrier),
                                                                   _callback(callback),
                                                                   _callback_data(callback_data),
                                                                   _running(running_flag),
-                                                                  _disable_denormals(disable_denormals)
+                                                                  _disable_denormals(disable_denormals),
+                                                                  _break_on_mode_sw(break_on_mode_sw)
 
     {}
 
@@ -261,12 +267,17 @@ public:
 private:
     void _internal_worker_function()
     {
-        // this is a realtime thread
+        // Signal that this is a realtime thread
         ThreadRtFlag rt_flag;
         if (_disable_denormals)
         {
             set_flush_denormals_to_zero();
         }
+        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        {
+            enable_break_on_mode_sw();
+        }
+
         while (true)
         {
             _barrier.wait();
@@ -285,6 +296,7 @@ private:
     void*                       _callback_data;
     const std::atomic_bool&     _running;
     bool                        _disable_denormals;
+    bool                        _break_on_mode_sw;
 };
 
 template <ThreadType type>
@@ -293,8 +305,11 @@ class WorkerPoolImpl : public WorkerPool
 public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
-    explicit WorkerPoolImpl(int cores, bool disable_denormals) : _no_cores(cores),
-                                                                 _disable_denormals(disable_denormals)
+    explicit WorkerPoolImpl(int cores,
+                            bool disable_denormals,
+                            bool break_on_mode_sw) : _no_cores(cores),
+                                                     _disable_denormals(disable_denormals),
+                                                     _break_on_mode_sw(break_on_mode_sw)
     {}
 
     ~WorkerPoolImpl()
@@ -304,9 +319,10 @@ public:
         _barrier.release_all();
     }
 
-    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void*worker_data) override
+    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data) override
     {
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, _disable_denormals);
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
+                                                           _disable_denormals, _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
         // round-robin assignment to cpu cores
         int core = (_no_workers + 1) % _no_cores;
@@ -345,6 +361,7 @@ private:
     int                         _no_workers{0};
     int                         _no_cores;
     bool                        _disable_denormals;
+    bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
 };
