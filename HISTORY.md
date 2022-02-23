@@ -1,6 +1,7 @@
-## TBD
+## 0.2.2
 New Features:
   * Tread pool uses semaphores for better performance
+  * Option to enable mode switch debugging on workers
 
 Fixes:
   * Memory leak in thread attributes
