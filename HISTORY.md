@@ -1,6 +1,6 @@
-## 0.2.2
+## 0.3.0
 New Features:
-  * Tread pool uses semaphores for better performance
+  * Tread pool uses semaphores for improved performance
   * Option to enable mode switch debugging on workers
 
 Fixes:

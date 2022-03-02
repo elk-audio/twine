@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.8)
 
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
 set(TWINE_VERSION_MAJOR 0)
-set(TWINE_VERSION_MINOR 2)
-set(TWINE_VERSION_REVISION 1)
+set(TWINE_VERSION_MINOR 3)
+set(TWINE_VERSION_REVISION 0)
 
 project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION})
 
