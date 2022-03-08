@@ -194,6 +194,7 @@ inline int semaphore_create(sem_t** semaphore, [[maybe_unused]] const char* sema
 {
     if constexpr (type == ThreadType::PTHREAD)
     {
+        sem_unlink(semaphore_name);
         *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
         return 0;
     }
