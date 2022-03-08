@@ -72,9 +72,9 @@ public:
     {
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        semaphore_create<type>(&_semaphores[0]);
-        semaphore_create<type>(&_semaphores[1]);
-        _active_sem = &_semaphores[0];
+        semaphore_create<type>(&_semaphores[0], "sem0");
+        semaphore_create<type>(&_semaphores[1], "sem1");
+        _active_sem = _semaphores[0];
     }
 
     /**
@@ -84,8 +84,8 @@ public:
     {
         mutex_destroy<type>(&_calling_mutex);
         condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(&_semaphores[0]);
-        semaphore_destroy<type>(&_semaphores[1]);
+        semaphore_destroy<type>(_semaphores[0], "sem0");
+        semaphore_destroy<type>(_semaphores[1], "sem1");
     }
 
     /**
@@ -187,17 +187,17 @@ public:
 private:
     void _swap_semaphores()
     {
-        if (_active_sem == &_semaphores[0])
+        if (_active_sem == _semaphores[0])
         {
-            _active_sem = &_semaphores[1];
+            _active_sem = _semaphores[1];
         }
         else
         {
-            _active_sem = &_semaphores[0];
+            _active_sem = _semaphores[0];
         }
     }
 
-    std::array<sem_t, 2> _semaphores;
+    std::array<sem_t*, 2> _semaphores;
     sem_t* _active_sem;
 
     pthread_mutex_t _calling_mutex;
@@ -233,7 +233,7 @@ public:
         }
     }
 
-    int run(int cpu_id)
+    int run([[maybe_unused]] int cpu_id)
     {
         struct sched_param rt_params = {.sched_priority = 75};
         pthread_attr_t task_attributes;

@@ -189,24 +189,27 @@ inline int thread_join(pthread_t thread, void** return_var = nullptr)
 }
 
 template<ThreadType type>
-inline int semaphore_create(sem_t* semaphore)
+inline int semaphore_create(sem_t** semaphore, [[maybe_unused]] const char* semaphore_name)
 {
     if constexpr (type == ThreadType::PTHREAD)
     {
-        return sem_init(semaphore, 0, 0);
+        *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
+        return 0;
     }
     else if constexpr (type == ThreadType::XENOMAI)
     {
-        return __cobalt_sem_init(semaphore, 0, 0);
+        return __cobalt_sem_init(*semaphore, 0, 0);
     }
 }
 
 template<ThreadType type>
-inline int semaphore_destroy(sem_t* semaphore)
+inline int semaphore_destroy(sem_t* semaphore, [[maybe_unused]] const char* semaphore_name)
 {
     if constexpr (type == ThreadType::PTHREAD)
     {
-        return sem_destroy(semaphore);
+        sem_unlink(semaphore_name);
+        sem_close(semaphore);
+        return 0;
     }
     else if constexpr (type == ThreadType::XENOMAI)
     {
