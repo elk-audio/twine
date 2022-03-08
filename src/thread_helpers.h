@@ -24,6 +24,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <fcntl.h>
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #pragma GCC diagnostic ignored "-Wunused-parameter"
