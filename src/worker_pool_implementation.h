@@ -78,12 +78,12 @@ public:
         }
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        int res = semaphore_create<type>(&_semaphores[0], "sem0");
+        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        res = semaphore_create<type>(&_semaphores[1], "sem1");
+        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
@@ -98,8 +98,8 @@ public:
     {
         mutex_destroy<type>(&_calling_mutex);
         condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(_semaphores[0], "sem0");
-        semaphore_destroy<type>(_semaphores[1], "sem1");
+        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
+        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
     }
 
     /**
