@@ -77,7 +77,8 @@ class WorkerPool
 {
 public:
     /**
-     * @brief Construct a WorkerPool object.
+     * @brief Construct a WorkerPool object. Throws a `std::runtime_error`
+     * if construction fails.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
