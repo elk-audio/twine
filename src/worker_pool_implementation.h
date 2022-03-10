@@ -26,6 +26,7 @@
 #include <array>
 #include <cstring>
 #include <cerrno>
+#include <stdexcept>
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
@@ -70,10 +71,23 @@ public:
      */
     BarrierWithTrigger()
     {
+        if constexpr (type == ThreadType::XENOMAI)
+        {
+            _semaphores[0] = &_semaphore_store[0];
+            _semaphores[1] = &_semaphore_store[1];
+        }
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        semaphore_create<type>(&_semaphores[0], "sem0");
-        semaphore_create<type>(&_semaphores[1], "sem1");
+        int res = semaphore_create<type>(&_semaphores[0], "sem0");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        res = semaphore_create<type>(&_semaphores[1], "sem1");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
         _active_sem = _semaphores[0];
     }
 
@@ -197,6 +211,7 @@ private:
         }
     }
 
+    std::array<sem_t, 2 > _semaphore_store;
     std::array<sem_t*, 2> _semaphores;
     sem_t* _active_sem;
 

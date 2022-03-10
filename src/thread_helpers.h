@@ -196,6 +196,10 @@ inline int semaphore_create(sem_t** semaphore, [[maybe_unused]] const char* sema
     {
         sem_unlink(semaphore_name);
         *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
+        if (*semaphore == SEM_FAILED)
+        {
+            return errno;
+        }
         return 0;
     }
     else if constexpr (type == ThreadType::XENOMAI)
