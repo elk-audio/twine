@@ -26,6 +26,7 @@
 #include <array>
 #include <cstring>
 #include <cerrno>
+#include <stdexcept>
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
@@ -70,11 +71,24 @@ public:
      */
     BarrierWithTrigger()
     {
+        if constexpr (type == ThreadType::XENOMAI)
+        {
+            _semaphores[0] = &_semaphore_store[0];
+            _semaphores[1] = &_semaphore_store[1];
+        }
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        semaphore_create<type>(&_semaphores[0]);
-        semaphore_create<type>(&_semaphores[1]);
-        _active_sem = &_semaphores[0];
+        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        _active_sem = _semaphores[0];
     }
 
     /**
@@ -84,8 +98,8 @@ public:
     {
         mutex_destroy<type>(&_calling_mutex);
         condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(&_semaphores[0]);
-        semaphore_destroy<type>(&_semaphores[1]);
+        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
+        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
     }
 
     /**
@@ -187,17 +201,18 @@ public:
 private:
     void _swap_semaphores()
     {
-        if (_active_sem == &_semaphores[0])
+        if (_active_sem == _semaphores[0])
         {
-            _active_sem = &_semaphores[1];
+            _active_sem = _semaphores[1];
         }
         else
         {
-            _active_sem = &_semaphores[0];
+            _active_sem = _semaphores[0];
         }
     }
 
-    std::array<sem_t, 2> _semaphores;
+    std::array<sem_t, 2 > _semaphore_store;
+    std::array<sem_t*, 2> _semaphores;
     sem_t* _active_sem;
 
     pthread_mutex_t _calling_mutex;
@@ -233,7 +248,7 @@ public:
         }
     }
 
-    int run(int cpu_id)
+    int run([[maybe_unused]] int cpu_id)
     {
         struct sched_param rt_params = {.sched_priority = 75};
         pthread_attr_t task_attributes;
