@@ -21,6 +21,8 @@
 
 namespace twine {
 
+constexpr int DEFAULT_SCHED_PRIORITY = 75;
+
 struct VersionInfo
 {
     int major;
@@ -108,7 +110,7 @@ public:
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
     virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
-                                        int sched_priority=75,
+                                        int sched_priority=DEFAULT_SCHED_PRIORITY,
                                         std::optional<int> cpu_id=std::nullopt) = 0;
 
     /**
