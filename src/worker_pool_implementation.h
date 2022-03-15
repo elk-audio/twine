@@ -348,14 +348,14 @@ public:
                                 int sched_priority=75,
                                 std::optional<int> cpu_id=std::nullopt) override
     {
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
-                                                           _disable_denormals, _break_on_mode_sw);
-        _barrier.set_no_threads(_no_workers + 1);
-
         int core = 0;
         if (cpu_id.has_value())
         {
             core = cpu_id.value();
+            if ( (core < 0) || (core >= _no_cores) )
+            {
+                return WorkerPoolStatus::INVALID_ARGUMENTS;
+            }
         }
         else
         {
@@ -373,6 +373,11 @@ public:
             }
             core = min_idx;
         }
+
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
+                                                           _disable_denormals, _break_on_mode_sw);
+        _barrier.set_no_threads(_no_workers + 1);
+
         _cores_usage[core]++;
 
         auto res = errno_to_worker_status(worker->run(sched_priority, core));

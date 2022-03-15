@@ -193,3 +193,9 @@ TEST_F(PthreadWorkerPoolTest, TestManualAffinity)
 
 }
 
+TEST_F(PthreadWorkerPoolTest, TestManualAffinityOutOfRange)
+{
+    auto res = _module_under_test.add_worker(worker_function, nullptr, 75, N_TEST_WORKERS+1);
+    ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
+}
+
