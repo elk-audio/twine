@@ -1,3 +1,11 @@
+## 0.3.0
+New Features:
+  * Tread pool uses semaphores for improved performance
+  * Option to enable mode switch debugging on workers
+
+Fixes:
+  * Memory leak in thread attributes
+
 ## 0.2.1
 
 Fixes:

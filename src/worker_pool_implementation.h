@@ -26,6 +26,7 @@
 #include <array>
 #include <cstring>
 #include <cerrno>
+#include <stdexcept>
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
@@ -33,6 +34,11 @@
 namespace twine {
 
 void set_flush_denormals_to_zero();
+
+inline void enable_break_on_mode_sw()
+{
+    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+}
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
@@ -68,11 +74,24 @@ public:
      */
     BarrierWithTrigger()
     {
+        if constexpr (type == ThreadType::XENOMAI)
+        {
+            _semaphores[0] = &_semaphore_store[0];
+            _semaphores[1] = &_semaphore_store[1];
+        }
         mutex_create<type>(&_calling_mutex, nullptr);
         condition_var_create<type>(&_calling_cond, nullptr);
-        semaphore_create<type>(&_semaphores[0]);
-        semaphore_create<type>(&_semaphores[1]);
-        _active_sem = &_semaphores[0];
+        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        if (res != 0)
+        {
+            throw std::runtime_error(strerror(res));
+        }
+        _active_sem = _semaphores[0];
     }
 
     /**
@@ -82,8 +101,8 @@ public:
     {
         mutex_destroy<type>(&_calling_mutex);
         condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(&_semaphores[0]);
-        semaphore_destroy<type>(&_semaphores[1]);
+        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
+        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
     }
 
     /**
@@ -182,21 +201,21 @@ public:
         mutex_unlock<type>(&_calling_mutex);
     }
 
-
 private:
     void _swap_semaphores()
     {
-        if (_active_sem == &_semaphores[0])
+        if (_active_sem == _semaphores[0])
         {
-            _active_sem = &_semaphores[1];
+            _active_sem = _semaphores[1];
         }
         else
         {
-            _active_sem = &_semaphores[0];
+            _active_sem = _semaphores[0];
         }
     }
 
-    std::array<sem_t, 2> _semaphores;
+    std::array<sem_t, 2 > _semaphore_store;
+    std::array<sem_t*, 2> _semaphores;
     sem_t* _active_sem;
 
     pthread_mutex_t _calling_mutex;
@@ -214,11 +233,13 @@ public:
 
     WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
                                          void*callback_data, std::atomic_bool& running_flag,
-                                         bool disable_denormals): _barrier(barrier),
+                                         bool disable_denormals,
+                                         bool break_on_mode_sw): _barrier(barrier),
                                                                   _callback(callback),
                                                                   _callback_data(callback_data),
                                                                   _running(running_flag),
-                                                                  _disable_denormals(disable_denormals)
+                                                                  _disable_denormals(disable_denormals),
+                                                                  _break_on_mode_sw(break_on_mode_sw)
 
     {}
 
@@ -230,7 +251,7 @@ public:
         }
     }
 
-    int run(int sched_priority, int cpu_id)
+    int run(int sched_priority, [[maybe_unused]] int cpu_id)
     {
         if ( (sched_priority < 0) || (sched_priority > 100) )
         {
@@ -254,8 +275,9 @@ public:
 #endif
         if (res == 0)
         {
-            return thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
         }
+        pthread_attr_destroy(&task_attributes);
         return res;
     }
 
@@ -268,12 +290,17 @@ public:
 private:
     void _internal_worker_function()
     {
-        // this is a realtime thread
+        // Signal that this is a realtime thread
         ThreadRtFlag rt_flag;
         if (_disable_denormals)
         {
             set_flush_denormals_to_zero();
         }
+        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        {
+            enable_break_on_mode_sw();
+        }
+
         while (true)
         {
             _barrier.wait();
@@ -293,6 +320,7 @@ private:
     const std::atomic_bool&     _running;
     bool                        _disable_denormals;
     int                         _priority {0};
+    bool                        _break_on_mode_sw;
 };
 
 template <ThreadType type>
@@ -301,9 +329,12 @@ class WorkerPoolImpl : public WorkerPool
 public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
-    explicit WorkerPoolImpl(int cores, bool disable_denormals) : _no_cores(cores),
-                                                                 _cores_usage(cores, 0),
-                                                                 _disable_denormals(disable_denormals)
+    explicit WorkerPoolImpl(int cores,
+                            bool disable_denormals,
+                            bool break_on_mode_sw) : _no_cores(cores),
+                                                     _cores_usage(cores, 0),
+                                                     _disable_denormals(disable_denormals),
+                                                     _break_on_mode_sw(break_on_mode_sw)
     {}
 
     ~WorkerPoolImpl()
@@ -317,7 +348,8 @@ public:
                                 int sched_priority=75,
                                 std::optional<int> cpu_id=std::nullopt) override
     {
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running, _disable_denormals);
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
+                                                           _disable_denormals, _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
 
         int core = 0;
@@ -379,6 +411,7 @@ private:
     int                         _no_cores;
     std::vector<int>            _cores_usage;
     bool                        _disable_denormals;
+    bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
 };

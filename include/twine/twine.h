@@ -79,14 +79,21 @@ class WorkerPool
 {
 public:
     /**
-     * @brief Construct a WorkerPool object.
+     * @brief Construct a WorkerPool object. Throws a `std::runtime_error`
+     * if construction fails.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
      *                          and DAC (denormals are zero) flags.
+     * @param break_on_mode_sw If set, enables the break_on_mode_swich flag for every worker
+     *                         thread, enabling debugging of memory allocations and syscalls from
+     *                         an audio thread. Only enabled for xenomai threads. Argument has no
+     *                         effect for posix threads.
      * @return
      */
-    static std::unique_ptr<WorkerPool> create_worker_pool(int cores, bool disable_denormals = true);
+    static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
+                                                          bool disable_denormals = true,
+                                                          bool break_on_mode_sw = false);
 
     virtual ~WorkerPool() = default;
 
