@@ -89,6 +89,7 @@ TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
     ASSERT_TRUE(b);
 }
 
+#ifndef __APPLE__
 TEST_F(PthreadWorkerPoolTest, TestSetPriority)
 {
     constexpr int TEST_SCHED_PRIO_0 = 66;
@@ -114,6 +115,7 @@ TEST_F(PthreadWorkerPoolTest, TestSetPriority)
     ASSERT_EQ(pres, 0);
     ASSERT_EQ(rt_params.sched_priority, TEST_SCHED_PRIO_1);
 }
+#endif
 
 TEST_F(PthreadWorkerPoolTest, TestWrongPriority)
 {
@@ -123,7 +125,7 @@ TEST_F(PthreadWorkerPoolTest, TestWrongPriority)
     ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res);
 }
 
-
+#ifndef __APPLE__
 TEST_F(PthreadWorkerPoolTest, TestAutomaticAffinity)
 {
     for (int i=0; i<N_TEST_WORKERS; i++)
@@ -192,6 +194,7 @@ TEST_F(PthreadWorkerPoolTest, TestManualAffinity)
     }
 
 }
+#endif
 
 TEST_F(PthreadWorkerPoolTest, TestManualAffinityOutOfRange)
 {
