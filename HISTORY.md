@@ -1,3 +1,10 @@
+## 0.3.1
+New Features:
+  * Worker priority and affinity is now settable per worker
+
+Fixes:
+  * Use named semaphores under Posix and macOS
+
 ## 0.3.0
 New Features:
   * Tread pool uses semaphores for improved performance
