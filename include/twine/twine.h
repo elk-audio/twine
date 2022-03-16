@@ -17,8 +17,11 @@
 
 #include <memory>
 #include <chrono>
+#include <optional>
 
 namespace twine {
+
+constexpr int DEFAULT_SCHED_PRIORITY = 75;
 
 struct VersionInfo
 {
@@ -61,7 +64,8 @@ enum class WorkerPoolStatus
     OK,
     ERROR,
     PERMISSION_DENIED,
-    LIMIT_EXCEEDED
+    LIMIT_EXCEEDED,
+    INVALID_ARGUMENTS
 };
 
 /**
@@ -99,9 +103,15 @@ public:
      * @brief Add a worker to the pool
      * @param worker_cb The worker callback function that will called by he worker
      * @param worker_data A data pointer that will be passed to the worker callback
+     * @param sched_priority Worker priority in [0, 100] (higher numbers mean higher priorities)
+     * @param cpu_id Optional CPU core affinity preference. If left unspecified,
+     *               the first core with least usage is picked
+     *
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data) = 0;
+    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
+                                        int sched_priority=DEFAULT_SCHED_PRIORITY,
+                                        std::optional<int> cpu_id=std::nullopt) = 0;
 
     /**
      * @brief Wait for all workers to finish and become idle. Will block until all

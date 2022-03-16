@@ -53,6 +53,9 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
         case EPERM:
             return WorkerPoolStatus::PERMISSION_DENIED;
 
+        case EINVAL:
+            return WorkerPoolStatus::INVALID_ARGUMENTS;
+
         default:
             return WorkerPoolStatus::ERROR;
     }
@@ -248,9 +251,14 @@ public:
         }
     }
 
-    int run([[maybe_unused]] int cpu_id)
+    int run(int sched_priority, [[maybe_unused]] int cpu_id)
     {
-        struct sched_param rt_params = {.sched_priority = 75};
+        if ( (sched_priority < 0) || (sched_priority > 100) )
+        {
+            return EINVAL;
+        }
+        _priority = sched_priority;
+        struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
 
@@ -311,6 +319,7 @@ private:
     void*                       _callback_data;
     const std::atomic_bool&     _running;
     bool                        _disable_denormals;
+    int                         _priority {0};
     bool                        _break_on_mode_sw;
 };
 
@@ -323,6 +332,7 @@ public:
     explicit WorkerPoolImpl(int cores,
                             bool disable_denormals,
                             bool break_on_mode_sw) : _no_cores(cores),
+                                                     _cores_usage(cores, 0),
                                                      _disable_denormals(disable_denormals),
                                                      _break_on_mode_sw(break_on_mode_sw)
     {}
@@ -334,14 +344,43 @@ public:
         _barrier.release_all();
     }
 
-    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data) override
+    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
+                                int sched_priority=75,
+                                std::optional<int> cpu_id=std::nullopt) override
     {
+        int core = 0;
+        if (cpu_id.has_value())
+        {
+            core = cpu_id.value();
+            if ( (core < 0) || (core >= _no_cores) )
+            {
+                return WorkerPoolStatus::INVALID_ARGUMENTS;
+            }
+        }
+        else
+        {
+            // If no core is specified, pick the first core with least usage
+            int min_idx = _no_cores - 1;
+            int min_usage = _cores_usage[min_idx];
+            for (int n = _no_cores-1; n >= 0; n--)
+            {
+                int cur_usage = _cores_usage[n];
+                if (cur_usage <= min_usage)
+                {
+                    min_usage = cur_usage;
+                    min_idx = n;
+                }
+            }
+            core = min_idx;
+        }
+
         auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
                                                            _disable_denormals, _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
-        // round-robin assignment to cpu cores
-        int core = (_no_workers + 1) % _no_cores;
-        auto res = errno_to_worker_status(worker->run(core));
+
+        _cores_usage[core]++;
+
+        auto res = errno_to_worker_status(worker->run(sched_priority, core));
         if (res == WorkerPoolStatus::OK)
         {
             // Wait until the thread is idle to avoid synchronisation issues
@@ -375,6 +414,7 @@ private:
     std::atomic_bool            _running{true};
     int                         _no_workers{0};
     int                         _no_cores;
+    std::vector<int>            _cores_usage;
     bool                        _disable_denormals;
     bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
