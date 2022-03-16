@@ -32,16 +32,16 @@ constexpr int DEFAULT_ITERATIONS = 10000;
 constexpr float CUTOFF = 0.2f;
 constexpr float Q = 0.5f;
 constexpr float w0 = 2.0f * M_PI * CUTOFF;
-constexpr float w0_cos = std::cos(w0);
-constexpr float w0_sin = std::sin(w0);
-constexpr float alpha = w0_sin / Q;
-constexpr float norm = 1.0f / (1.0f + alpha);
+const float w0_cos = std::cos(w0);
+const float w0_sin = std::sin(w0);
+const float alpha = w0_sin / Q;
+const float norm = 1.0f / (1.0f + alpha);
 
-constexpr float co_a1 = -2.0f * w0_cos * norm;
-constexpr float co_a2 = (1 - alpha) * norm;
-constexpr float co_b0 = (1.0f - w0_cos) / 2.0f * norm;;
-constexpr float co_b1 = (1 - w0_cos) * norm;
-constexpr float co_b2 = co_b0;
+const float co_a1 = -2.0f * w0_cos * norm;
+const float co_a2 = (1 - alpha) * norm;
+const float co_b0 = (1.0f - w0_cos) / 2.0f * norm;;
+const float co_b1 = (1 - w0_cos) * norm;
+const float co_b2 = co_b0;
 
 using AudioBuffer = std::array<float, 128>;
 using FilterRegister = std::array<float, 2>;
