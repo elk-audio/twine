@@ -40,5 +40,3 @@ add_dependencies(run_tests unit_tests)
 # Stress test is not built per default
 add_subdirectory(stresstest EXCLUDE_FROM_ALL)
 
-
-

@@ -68,6 +68,7 @@ bool is_current_thread_realtime()
     return ThreadRtFlag::is_realtime();
 }
 
+#ifdef TWINE_BUILD_WITH_XENOMAI
 int rt_printf(const char *format, ...)
 {
     va_list args;
@@ -79,6 +80,9 @@ int rt_printf(const char *format, ...)
 
     return n;
 }
+#else
+    #define rt_printf printf
+#endif
 
 void init_xenomai()
 {
@@ -89,10 +93,12 @@ void init_xenomai()
 
 std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disable_denormals, bool break_on_mode_sw)
 {
+#ifdef TWINE_BUILD_WITH_XENOMAI
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores, disable_denormals, break_on_mode_sw);
+        return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, disable_denormals, break_on_mode_sw);
     }
+#endif
     return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals, break_on_mode_sw);
 }
 
@@ -100,9 +106,14 @@ std::chrono::nanoseconds current_rt_time()
 {
     if (running_xenomai_realtime.is_set())
     {
+#ifdef TWINE_BUILD_WITH_XENOMAI
         timespec tp;
         __cobalt_clock_gettime(CLOCK_MONOTONIC, &tp);
         return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
+#else
+        assert(false && "Xenomai realtime set without a RT build");
+        return std::chrono::nanoseconds(0);
+#endif
     }
     else
     {

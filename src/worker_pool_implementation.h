@@ -22,12 +22,14 @@
 
 #include <cassert>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <array>
 #include <cstring>
 #include <cerrno>
 #include <stdexcept>
 
+#include "twine/twine.h"
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
@@ -37,7 +39,9 @@ void set_flush_denormals_to_zero();
 
 inline void enable_break_on_mode_sw()
 {
+#ifdef TWINE_BUILD_WITH_XENOMAI
     pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#endif
 }
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
@@ -74,24 +78,45 @@ public:
      */
     BarrierWithTrigger()
     {
-        if constexpr (type == ThreadType::XENOMAI)
+        if constexpr (type == ThreadType::PTHREAD)
         {
-            _semaphores[0] = &_semaphore_store[0];
-            _semaphores[1] = &_semaphore_store[1];
+            _thread_helper = new PosixThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
         }
-        mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_calling_cond, nullptr);
-        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_COBALT
+            _thread_helper = new PosixThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+
+        int res = _thread_helper->semaphore_create(_semaphores[0], "twine_semaphore_0");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        res = _thread_helper->semaphore_create(_semaphores[1], "twine_semaphore_1");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        _active_sem = _semaphores[0];
+        _thread_helper->mutex_create(_calling_mutex);
+        _thread_helper->condition_var_create(_calling_cond);
     }
 
     /**
@@ -99,10 +124,16 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
-        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
+        _thread_helper->mutex_destroy(_calling_mutex);
+        _thread_helper->condition_var_destroy(_calling_cond);
+        _thread_helper->semaphore_destroy(_semaphores[0], "twine_semaphore_0");
+        _thread_helper->semaphore_destroy(_semaphores[1], "twine_semaphore_1");
+
+        delete _semaphores[0];
+        delete _semaphores[1];
+        delete _calling_mutex;
+        delete _calling_cond;
+        delete _thread_helper;
     }
 
     /**
@@ -111,15 +142,15 @@ public:
      */
     void wait()
     {
-        mutex_lock<type>(&_calling_mutex);
-        auto active_sem = _active_sem;
+        _thread_helper->mutex_lock(_calling_mutex);
+        auto active_sem = _semaphores[_active_sem_idx];
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
-            condition_signal<type>(&_calling_cond);
+            _thread_helper->condition_signal(_calling_cond);
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
 
-        semaphore_wait<type>(active_sem);
+        _thread_helper->semaphore_wait(active_sem);
     }
 
     /**
@@ -129,20 +160,20 @@ public:
      */
     void wait_for_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
 
         if (current_threads == _no_threads)
         {
-            mutex_unlock<type>(&_calling_mutex);
+            _thread_helper->mutex_unlock(_calling_mutex);
             return;
         }
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -151,9 +182,9 @@ public:
      */
     void set_no_threads(int threads)
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         _no_threads = threads;
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -161,69 +192,64 @@ public:
      */
     void release_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
 
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     void release_and_wait()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
         int current_threads = _no_threads_currently_on_barrier;
 
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
 private:
     void _swap_semaphores()
     {
-        if (_active_sem == _semaphores[0])
-        {
-            _active_sem = _semaphores[1];
-        }
-        else
-        {
-            _active_sem = _semaphores[0];
-        }
+        _active_sem_idx = 1 - _active_sem_idx;
     }
 
-    std::array<sem_t, 2 > _semaphore_store;
-    std::array<sem_t*, 2> _semaphores;
-    sem_t* _active_sem;
+    BaseThreadHelper* _thread_helper;
 
-    pthread_mutex_t _calling_mutex;
-    pthread_cond_t  _calling_cond;
+    std::array<BaseSemaphore*, 2> _semaphores;
+    int _active_sem_idx {0};
+
+    BaseMutex* _calling_mutex;
+    BaseCondVar* _calling_cond;
 
     std::atomic<int> _no_threads_currently_on_barrier{0};
     std::atomic<int> _no_threads{0};
 };
+
 
 template <ThreadType type>
 class WorkerThread
@@ -241,14 +267,30 @@ public:
                                                                   _disable_denormals(disable_denormals),
                                                                   _break_on_mode_sw(break_on_mode_sw)
 
-    {}
+    {
+        if constexpr (type == ThreadType::PTHREAD)
+        {
+            _thread_helper = new PosixThreadHelper();
+        }
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_COBALT
+            _thread_helper = new PosixThreadHelper();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+
+    }
 
     ~WorkerThread()
     {
         if (_thread_handle != 0)
         {
-            thread_join<type>(_thread_handle, nullptr);
+            _thread_helper->thread_join(_thread_handle, nullptr);
         }
+
+        delete _thread_helper;
     }
 
     int run(int sched_priority, [[maybe_unused]] int cpu_id)
@@ -275,7 +317,7 @@ public:
 #endif
         if (res == 0)
         {
-            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = _thread_helper->thread_create(&_thread_handle, &task_attributes, &_worker_function, this);
         }
         pthread_attr_destroy(&task_attributes);
         return res;
@@ -296,7 +338,7 @@ private:
         {
             set_flush_denormals_to_zero();
         }
-        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        if (type == ThreadType::COBALT && _break_on_mode_sw)
         {
             enable_break_on_mode_sw();
         }
@@ -321,7 +363,10 @@ private:
     bool                        _disable_denormals;
     int                         _priority {0};
     bool                        _break_on_mode_sw;
+
+    BaseThreadHelper* _thread_helper;
 };
+
 
 template <ThreadType type>
 class WorkerPoolImpl : public WorkerPool

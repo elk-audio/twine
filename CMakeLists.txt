@@ -11,10 +11,8 @@ project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERS
 #  Build Options       #
 ########################
 
-# These can be overriden by ccmake, commandline args or using
-# set(BUILD_OPTION <new value> CACHE <type> "") in an including project
-
-option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
+# _WITH_COBALT would have been a better name here, keeping the old variable for backwards compatibility
+option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 
 SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
@@ -81,7 +79,8 @@ endfunction()
 #  Library target  #
 ####################
 
-set(COMPILATION_UNITS src/twine.cpp)
+set(COMPILATION_UNITS src/twine.cpp
+                      src/thread_helpers_posix.cpp)
 
 # Enumerate all the headers separately so that CLion can index them
 set(EXTRA_CLION_SOURCES  include/twine/twine.h
@@ -103,6 +102,7 @@ target_compile_options(twine PRIVATE -Wall -Wextra)
 target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 
 if (${TWINE_WITH_XENOMAI})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
     add_xenomai_to_target(twine)
 endif()
 
