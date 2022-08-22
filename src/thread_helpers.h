@@ -27,13 +27,20 @@
 #include <semaphore.h>
 #include <fcntl.h>
 
+#ifdef TWINE_BUILD_WITH_EVL
+    #include <evl/evl.h>
+    #include <evl/clock.h>
+    #include <evl/mutex.h>
+#endif
+
 
 namespace twine {
 
 enum class ThreadType : uint32_t
 {
     PTHREAD,
-    COBALT
+    COBALT,
+    EVL
 };
 
 
@@ -65,7 +72,7 @@ public:
     virtual ~BaseThreadHelper() = 0;
 
 
-    virtual int mutex_create(BaseMutex* mutex) = 0;
+    virtual int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) = 0;
 
     virtual int mutex_destroy(BaseMutex* mutex) = 0;
 
@@ -73,7 +80,7 @@ public:
 
     virtual int mutex_unlock(BaseMutex* mutex) = 0;
 
-    virtual int condition_var_create(BaseCondVar* condition_var) = 0;
+    virtual int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) = 0;
 
     virtual int condition_var_destroy(BaseCondVar* condition_var) = 0;
 
@@ -85,9 +92,9 @@ public:
 
     virtual int thread_join(pthread_t thread, void** return_var = nullptr) = 0;
 
-    virtual int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) = 0;
+    virtual int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) = 0;
 
-    virtual int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) = 0;
+    virtual int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) = 0;
 
     virtual int semaphore_wait(BaseSemaphore* semaphore) = 0;
 
@@ -99,7 +106,7 @@ class PosixThreadHelper : public BaseThreadHelper
 {
 public:
 
-    int mutex_create(BaseMutex* mutex) override;
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
 
     int mutex_destroy(BaseMutex* mutex) override;
 
@@ -107,7 +114,7 @@ public:
 
     int mutex_unlock(BaseMutex* mutex) override;
 
-    int condition_var_create(BaseCondVar* condition_var) override;
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
 
     int condition_var_destroy(BaseCondVar* condition_var) override;
 
@@ -119,9 +126,9 @@ public:
 
     int thread_join(pthread_t thread, void** return_var = nullptr) override;
 
-    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
 
-    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
 
     int semaphore_wait(BaseSemaphore* semaphore) override;
 
@@ -168,7 +175,7 @@ class CobaltThreadHelper : public BaseThreadHelper
 {
 public:
 
-    int mutex_create(BaseMutex* mutex) override;
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
 
     int mutex_destroy(BaseMutex* mutex) override;
 
@@ -176,7 +183,7 @@ public:
 
     int mutex_unlock(BaseMutex* mutex) override;
 
-    int condition_var_create(BaseCondVar* condition_var) override;
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
 
     int condition_var_destroy(BaseCondVar* condition_var) override;
 
@@ -188,15 +195,67 @@ public:
 
     int thread_join(pthread_t thread, void** return_var = nullptr) override;
 
-    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
 
-    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
 
     int semaphore_wait(BaseSemaphore* semaphore) override;
 
     int semaphore_signal(BaseSemaphore* semaphore) override;
 };
+
 #endif // TWINE_BUILD_WITH_XENOMAI
+
+#ifdef TWINE_BUILD_WITH_EVL
+
+struct EvlMutex : BaseMutex
+{
+    struct evl_mutex mutex;
+};
+
+struct EvlCondVar : BaseCondVar
+{
+    struct evl_event cond_var;
+};
+
+struct EvlSemaphore : BaseSemaphore
+{
+    struct evl_sem semaphore;
+};
+
+class EvlThreadHelper : public BaseThreadHelper
+{
+public:
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
+
+    int mutex_destroy(BaseMutex* mutex) override;
+
+    int mutex_lock(BaseMutex* mutex) override;
+
+    int mutex_unlock(BaseMutex* mutex) override;
+
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
+
+    int condition_var_destroy(BaseCondVar* condition_var) override;
+
+    int condition_wait(BaseCondVar* condition_var, BaseMutex* mutex) override;
+
+    int condition_signal(BaseCondVar* condition_var) override;
+
+    int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
+
+    int thread_join(pthread_t thread, void** return_var = nullptr) override;
+
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_wait(BaseSemaphore* semaphore) override;
+
+    int semaphore_signal(BaseSemaphore* semaphore) override;
+};
+
+#endif // TWINE_BUILD_WITH_EVL
 
 } // namespace twine
 

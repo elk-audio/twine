@@ -6,7 +6,10 @@
 
 namespace twine {
 
-int CobaltThreadHelper::mutex_create(BaseMutex* mutex)
+CobaltThreadHelper::~CobaltThreadHelper()
+{}
+
+int CobaltThreadHelper::mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name)
 {
     return __cobalt_pthread_mutex_init(to_posix_mutex(mutex), nullptr);
 }

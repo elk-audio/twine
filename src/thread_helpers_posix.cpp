@@ -17,7 +17,7 @@ BaseSemaphore::~BaseSemaphore()
 {}
 
 
-int PosixThreadHelper::mutex_create(BaseMutex* mutex)
+int PosixThreadHelper::mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name)
 {
     return pthread_mutex_init(to_posix_mutex(mutex), nullptr);
 }
@@ -37,7 +37,7 @@ int PosixThreadHelper::mutex_unlock(BaseMutex* mutex)
     return pthread_mutex_unlock(to_posix_mutex(mutex));
 }
 
-int PosixThreadHelper::condition_var_create(BaseCondVar* condition_var)
+int PosixThreadHelper::condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name)
 {
     return pthread_cond_init(to_posix_cond(condition_var), nullptr);
 }
@@ -67,11 +67,11 @@ int PosixThreadHelper::thread_join(pthread_t thread, void** return_var)
     return pthread_join(thread, return_var);
 }
 
-int PosixThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name)
+int PosixThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name)
 {
-    sem_unlink(semaphore_name);
+    sem_unlink(name);
     auto psemaphore = to_posix_sem(semaphore);
-    psemaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
+    psemaphore = sem_open(name, O_CREAT, 0, 0);
     if (psemaphore == SEM_FAILED)
     {
         return errno;
@@ -79,9 +79,9 @@ int PosixThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused
     return 0;
 }
 
-int PosixThreadHelper::semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name)
+int PosixThreadHelper::semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name)
 {
-    sem_unlink(semaphore_name);
+    sem_unlink(name);
     sem_close(to_posix_sem(semaphore));
     return 0;
 }

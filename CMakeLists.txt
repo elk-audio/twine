@@ -13,7 +13,12 @@ project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERS
 
 # _WITH_COBALT would have been a better name here, keeping the old variable for backwards compatibility
 option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
+option(TWINE_WITH_EVL "Build with EVL (Xenomai 4.x) realtime task support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
+
+if (TWINE_WITH_XENOMAI AND TWINE_WITH_EVL)
+    message(FATAL_ERROR "Both Xenomai and EVL options set, choose only one of them.")
+endif()
 
 SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
 
@@ -21,15 +26,19 @@ SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultane
 #  Cross compilation  #
 #######################
 
-set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
+if(TWINE_WITH_XENOMAI)
 
-if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
-    set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
-endif()
+    set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
 
-if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
-    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
-    message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
+    if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
+        set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
+    endif()
+
+    if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
+        set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
+        message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
+    endif()
+
 endif()
 
 ##################################
@@ -59,7 +68,7 @@ configure_file(
 # This intentionally does not include all the super-auto-magic linker wrappers,
 # who seems to play very badly with other libraries at static initialization.
 function(add_xenomai_to_target target)
-    target_compile_definitions(${target} PRIVATE -DTWINE_BUILD_WITH_XENOMAI)
+    target_compile_definitions(${target} PRIVATE TWINE_BUILD_WITH_XENOMAI)
 
     # from `xeno-config --skin=posix --cflags`
     set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
@@ -72,39 +81,45 @@ function(add_xenomai_to_target target)
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
-    target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
+    set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} ${COBALT_LIB} rt m)
 endfunction()
 
 ####################
 #  Library target  #
 ####################
 
-set(COMPILATION_UNITS src/twine.cpp
-                      src/thread_helpers_posix.cpp)
+set(SOURCE_FILES src/twine.cpp
+                 src/thread_helpers_posix.cpp)
 
-# Enumerate all the headers separately so that CLion can index them
-set(EXTRA_CLION_SOURCES  include/twine/twine.h
-                         src/twine_internal.h
-                         src/worker_pool_implementation.h
-                         src/thread_helpers.h)
+if (${TWINE_WITH_XENOMAI})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
+endif()
 
-set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
+if (${TWINE_WITH_EVL})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_evl.cpp)
+endif()
+
+set(TWINE_LINK_LIBRARIES pthread)
 
 add_library(twine SHARED ${SOURCE_FILES})
 
+if (${TWINE_WITH_XENOMAI})
+    add_xenomai_to_target(twine)
+endif()
+if (${TWINE_WITH_EVL})
+    target_compile_definitions(twine PRIVATE TWINE_BUILD_WITH_EVL)
+    set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
+endif()
+
 target_include_directories(twine PRIVATE ${PROJECT_BINARY_DIR}/generated)
 target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(twine PRIVATE pthread)
+target_link_libraries(twine PUBLIC ${TWINE_LINK_LIBRARIES})
 
 #Require users to have c++17 support
 target_compile_features(twine PUBLIC cxx_std_17)
 target_compile_options(twine PRIVATE -Wall -Wextra)
 target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 
-if (${TWINE_WITH_XENOMAI})
-    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
-    add_xenomai_to_target(twine)
-endif()
 
 #######################
 #  Unit test targets  #

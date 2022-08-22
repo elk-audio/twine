@@ -29,6 +29,11 @@
 #include <cerrno>
 #include <stdexcept>
 
+#ifdef TWINE_BUILD_WITH_EVL
+    #include <unistd.h>
+    #include <evl/thread.h>
+#endif
+
 #include "twine/twine.h"
 #include "thread_helpers.h"
 #include "twine_internal.h"
@@ -92,7 +97,7 @@ public:
         else if constexpr (type == ThreadType::COBALT)
         {
 #ifdef TWINE_BUILD_WITH_COBALT
-            _thread_helper = new PosixThreadHelper();
+            _thread_helper = new CobaltThreadHelper();
 
             _semaphores[0] = new PosixSemaphore();
             _semaphores[1] = new PosixSemaphore();
@@ -104,19 +109,34 @@ public:
             assert(false && "Not built with Cobalt support");
 #endif
         }
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
 
-        int res = _thread_helper->semaphore_create(_semaphores[0], "twine_semaphore_0");
+            _semaphores[0] = new EvlSemaphore();
+            _semaphores[1] = new EvlSemaphore();
+
+            _calling_mutex = new EvlMutex();
+
+            _calling_cond = new EvlCondVar();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
+
+        int res = _thread_helper->semaphore_create(_semaphores[0], "/twine-barrier-sem-0");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        res = _thread_helper->semaphore_create(_semaphores[1], "twine_semaphore_1");
+        res = _thread_helper->semaphore_create(_semaphores[1], "/twine-barrier-sem-1");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        _thread_helper->mutex_create(_calling_mutex);
-        _thread_helper->condition_var_create(_calling_cond);
+        _thread_helper->mutex_create(_calling_mutex, "/twine-barrier-mutex");
+        _thread_helper->condition_var_create(_calling_cond, "/twine-barrier-condvar");
     }
 
     /**
@@ -126,8 +146,8 @@ public:
     {
         _thread_helper->mutex_destroy(_calling_mutex);
         _thread_helper->condition_var_destroy(_calling_cond);
-        _thread_helper->semaphore_destroy(_semaphores[0], "twine_semaphore_0");
-        _thread_helper->semaphore_destroy(_semaphores[1], "twine_semaphore_1");
+        _thread_helper->semaphore_destroy(_semaphores[0], "/twine-barrier-sem-0");
+        _thread_helper->semaphore_destroy(_semaphores[1], "/twine-barrier-sem-1");
 
         delete _semaphores[0];
         delete _semaphores[1];
@@ -275,12 +295,19 @@ public:
         else if constexpr (type == ThreadType::COBALT)
         {
 #ifdef TWINE_BUILD_WITH_COBALT
-            _thread_helper = new PosixThreadHelper();
+            _thread_helper = new CobaltThreadHelper();
 #else
             assert(false && "Not built with Cobalt support");
 #endif
         }
-
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
     }
 
     ~WorkerThread()
@@ -343,6 +370,13 @@ private:
             enable_break_on_mode_sw();
         }
 
+        if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+	        evl_attach_self("/twine-worker-%d", gettid());
+#endif
+        }
+
         while (true)
         {
             _barrier.wait();
@@ -364,7 +398,7 @@ private:
     int                         _priority {0};
     bool                        _break_on_mode_sw;
 
-    BaseThreadHelper* _thread_helper;
+    BaseThreadHelper*           _thread_helper;
 };
 
 

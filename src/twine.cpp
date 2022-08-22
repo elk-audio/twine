@@ -28,10 +28,12 @@
     #pragma GCC diagnostic ignored "-Wunused-parameter"
     #include <cobalt/stdio.h>
     #pragma GCC diagnostic pop
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/proxy.h>
+    #include <evl/clock.h>
 #else
     #include <cstdio>
     #include <cstdarg>
-    #define rt_vfprintf vfprintf
 #endif
 
 #include "twine/twine.h"
@@ -83,13 +85,15 @@ int rt_printf(const char *format, ...)
 
     return n;
 }
+#elif TWINE_BUILD_WITH_EVL
+    #define rt_printf evl_printf
 #else
     #define rt_printf printf
 #endif
 
 void init_xenomai()
 {
-#ifdef TWINE_BUILD_WITH_XENOMAI
+#if defined(TWINE_BUILD_WITH_XENOMAI) || defined(TWINE_BUILD_WITH_EVL)
     running_xenomai_realtime.set(true);
 #endif
 }
@@ -100,6 +104,11 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disab
     if (running_xenomai_realtime.is_set())
     {
         return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, disable_denormals, break_on_mode_sw);
+    }
+#elif TWINE_BUILD_WITH_EVL
+    if (running_xenomai_realtime.is_set())
+    {
+        return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, disable_denormals, break_on_mode_sw);
     }
 #endif
     return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals, break_on_mode_sw);
@@ -112,6 +121,10 @@ std::chrono::nanoseconds current_rt_time()
 #ifdef TWINE_BUILD_WITH_XENOMAI
         timespec tp;
         __cobalt_clock_gettime(CLOCK_MONOTONIC, &tp);
+        return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
+#elif TWINE_BUILD_WITH_EVL
+        timespec tp;
+        evl_read_clock(EVL_CLOCK_MONOTONIC, &tp);
         return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
 #else
         assert(false && "Xenomai realtime set without a RT build");
