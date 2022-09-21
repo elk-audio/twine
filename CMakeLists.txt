@@ -3,21 +3,23 @@ cmake_minimum_required(VERSION 3.8)
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
 set(TWINE_VERSION_MAJOR 0)
 set(TWINE_VERSION_MINOR 3)
-set(TWINE_VERSION_REVISION 0)
+set(TWINE_VERSION_REVISION 2)
 
-project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION})
+project(twine
+    DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
+    HOMEPAGE_URL "https://github.com/elk-audio/twine"
+    LANGUAGES CXX
+    VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
+)
 
 ########################
 #  Build Options       #
 ########################
 
-# These can be overriden by ccmake, commandline args or using
-# set(BUILD_OPTION <new value> CACHE <type> "") in an including project
-
 option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 
-SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+set(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
 
 #######################
 #  Cross compilation  #
@@ -91,20 +93,22 @@ set(EXTRA_CLION_SOURCES  include/twine/twine.h
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
-add_library(twine SHARED ${SOURCE_FILES})
+# Define an object target that could be used for static linking as well
+add_library(twine_objlib OBJECT ${SOURCE_FILES})
 
-target_include_directories(twine PRIVATE ${PROJECT_BINARY_DIR}/generated)
-target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(twine PRIVATE pthread)
-
-#Require users to have c++17 support
-target_compile_features(twine PUBLIC cxx_std_17)
-target_compile_options(twine PRIVATE -Wall -Wextra)
-target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
-
+target_include_directories(twine_objlib PRIVATE ${PROJECT_BINARY_DIR}/generated)
+target_include_directories(twine_objlib PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(twine_objlib PRIVATE pthread)
+target_compile_features(twine_objlib PUBLIC cxx_std_17)
+target_compile_options(twine_objlib PRIVATE -Wall -Wextra)
+target_compile_definitions(twine_objlib PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 if (${TWINE_WITH_XENOMAI})
-    add_xenomai_to_target(twine)
+    add_xenomai_to_target(twine_objlib)
 endif()
+
+add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
+set_property(TARGET twine PROPERTY POSITION_INDEPENDENT_CODE 1)
+
 
 #######################
 #  Unit test targets  #
