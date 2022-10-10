@@ -101,14 +101,14 @@ target_include_directories(twine_objlib PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(twine_objlib PRIVATE pthread)
 target_compile_features(twine_objlib PUBLIC cxx_std_17)
 target_compile_options(twine_objlib PRIVATE -Wall -Wextra)
+set_property(TARGET twine_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
 target_compile_definitions(twine_objlib PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(twine_objlib)
 endif()
 
 add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
-set_property(TARGET twine PROPERTY POSITION_INDEPENDENT_CODE 1)
-
+target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 #######################
 #  Unit test targets  #
