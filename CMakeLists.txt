@@ -79,36 +79,37 @@ function(add_xenomai_to_target target)
     target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
 endfunction()
 
+function(set_twine_target_properties target)
+    target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
+    target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    target_link_libraries(${target} PRIVATE pthread)
+    target_compile_features(${target} PUBLIC cxx_std_17)
+    target_compile_options(${target} PRIVATE -Wall -Wextra)
+    set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
+    target_compile_definitions(${target} PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
+    if (${TWINE_WITH_XENOMAI})
+        add_xenomai_to_target(${target})
+    endif()
+    target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
+    set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
+endfunction()
+
 ####################
 #  Library target  #
 ####################
 
-set(COMPILATION_UNITS src/twine.cpp)
+set(SOURCE_FILES src/twine.cpp)
 
-# Enumerate all the headers separately so that CLion can index them
-set(EXTRA_CLION_SOURCES  include/twine/twine.h
-                         src/twine_internal.h
-                         src/worker_pool_implementation.h
-                         src/thread_helpers.h)
+# The best way to build both static & dynamic targets
+# would have been to reuse the existing objects as in:
+#   add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
+# but it doesn't play nicely with XCode builds, so we just define both
 
-set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
-
-# Define an object target that could be used for static linking as well
-add_library(twine_objlib OBJECT ${SOURCE_FILES})
-
-target_include_directories(twine_objlib PRIVATE ${PROJECT_BINARY_DIR}/generated)
-target_include_directories(twine_objlib PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(twine_objlib PRIVATE pthread)
-target_compile_features(twine_objlib PUBLIC cxx_std_17)
-target_compile_options(twine_objlib PRIVATE -Wall -Wextra)
-set_property(TARGET twine_objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
-target_compile_definitions(twine_objlib PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
-if (${TWINE_WITH_XENOMAI})
-    add_xenomai_to_target(twine_objlib)
-endif()
-
-add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
-target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
+add_library(twine_static STATIC ${SOURCE_FILES})
+set_twine_target_properties(twine_static)
+add_library(twine SHARED ${SOURCE_FILES})
+set_twine_target_properties(twine)
 
 #######################
 #  Unit test targets  #
@@ -122,8 +123,6 @@ endif()
 #  Install  #
 #############
 
-set_target_properties(twine PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
-set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 
 install(TARGETS twine
     ARCHIVE DESTINATION lib
