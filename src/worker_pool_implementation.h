@@ -42,13 +42,6 @@ namespace twine {
 
 void set_flush_denormals_to_zero();
 
-inline void enable_break_on_mode_sw()
-{
-#ifdef TWINE_BUILD_WITH_XENOMAI
-    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
-#endif
-}
-
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
     switch (error)
@@ -367,13 +360,19 @@ private:
         }
         if (type == ThreadType::COBALT && _break_on_mode_sw)
         {
-            enable_break_on_mode_sw();
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#endif
         }
 
         if constexpr (type == ThreadType::EVL)
         {
 #ifdef TWINE_BUILD_WITH_EVL
-	        evl_attach_self("/twine-worker-%d", gettid());
+	        auto tfd = evl_attach_self("/twine-worker-%d", gettid());
+            if (_break_on_mode_sw)
+            {
+                evl_set_thread_mode(tfd, T_WOSS, NULL);
+            }
 #endif
         }
 
