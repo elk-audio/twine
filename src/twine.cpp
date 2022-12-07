@@ -126,7 +126,7 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
     }
 #endif
 
-    return std::make_unique<PosixConditionVariable>();
+    return std::make_unique<PosixSemaphoreConditionVariable>();
 }
 
 } // twine

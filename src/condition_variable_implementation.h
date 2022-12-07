@@ -22,6 +22,8 @@
 #include <cstring>
 #include <cassert>
 
+#include <semaphore.h>
+
 #include "twine_internal.h"
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -66,6 +68,71 @@ bool PosixConditionVariable::wait()
     bool notified = _flag;
     _flag = false;
     return notified;
+}
+
+/**
+ * @brief Implementation using posix semaphores for use in regular linux and MacOs
+ */
+
+constexpr std::string_view COND_VAR_BASE_NAME = "/twine_cond_";
+constexpr int MAX_RETRIES = 100;
+
+class PosixSemaphoreConditionVariable : public RtConditionVariable
+{
+public:
+    PosixSemaphoreConditionVariable();
+
+    ~PosixSemaphoreConditionVariable() override;
+
+    void notify() override;
+
+    bool wait() override;
+
+private:
+    std::string   _name;
+    sem_t*        _semaphore;
+};
+
+PosixSemaphoreConditionVariable::PosixSemaphoreConditionVariable() : _semaphore(nullptr)
+{
+    int idx = 0;
+
+    while (idx < MAX_RETRIES)
+    {
+        std::string name = std::string(COND_VAR_BASE_NAME).append(std::to_string(idx++));
+        _semaphore = sem_open(name.c_str(), O_CREAT | O_EXCL, 0, 0);
+        if (_semaphore == SEM_FAILED)
+        {
+            if (errno != EEXIST)
+            {
+                throw std::runtime_error("Failed to initialize RtConditionVariable");
+            }
+            continue;
+        }
+        _name = name;
+        return;
+    }
+}
+
+PosixSemaphoreConditionVariable::~PosixSemaphoreConditionVariable()
+{
+    if (_semaphore)
+    {
+        this->notify();
+        sem_unlink(_name.c_str());
+        sem_destroy(_semaphore);
+    }
+}
+
+void PosixSemaphoreConditionVariable::notify()
+{
+    sem_post(_semaphore);
+}
+
+bool PosixSemaphoreConditionVariable::wait()
+{
+    sem_wait(_semaphore);
+    return true;
 }
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
