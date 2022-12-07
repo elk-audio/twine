@@ -20,7 +20,6 @@ target_include_directories(unit_tests PRIVATE  ${PROJECT_SOURCE_DIR}/include
                                                ${PROJECT_SOURCE_DIR}/test/gtest/include
                                                ${CMAKE_BINARY_DIR}/generated)
 
-
 target_link_libraries(unit_tests gtest gtest_main twine)
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)

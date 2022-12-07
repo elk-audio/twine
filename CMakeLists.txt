@@ -3,9 +3,14 @@ cmake_minimum_required(VERSION 3.8)
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
 set(TWINE_VERSION_MAJOR 0)
 set(TWINE_VERSION_MINOR 3)
-set(TWINE_VERSION_REVISION 0)
+set(TWINE_VERSION_REVISION 2)
 
-project(twine VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION})
+project(twine
+    DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
+    HOMEPAGE_URL "https://github.com/elk-audio/twine"
+    LANGUAGES CXX
+    VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
+)
 
 ########################
 #  Build Options       #
@@ -84,6 +89,28 @@ function(add_xenomai_to_target target)
     set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} ${COBALT_LIB} rt m)
 endfunction()
 
+function(set_twine_target_properties target)
+    target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
+    target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    target_compile_features(${target} PUBLIC cxx_std_17)
+    target_compile_options(${target} PRIVATE -Wall -Wextra)
+    set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
+    target_compile_definitions(${target} PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
+
+    if (${TWINE_WITH_XENOMAI})
+        message("Building Twine with Xenomai 3.x")
+        add_xenomai_to_target(${target})
+    elseif (${TWINE_WITH_EVL})
+        message("Building Twine with EVL")
+        target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
+        set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
+    endif()
+
+    target_link_libraries(${target} PUBLIC ${TWINE_LINK_LIBRARIES})
+    set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
+    set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
+endfunction()
+
 ####################
 #  Library target  #
 ####################
@@ -101,26 +128,15 @@ endif()
 
 set(TWINE_LINK_LIBRARIES pthread)
 
+# The best way to build both static & dynamic targets
+# would have been to reuse the existing objects as in:
+#   add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
+# but it doesn't play nicely with XCode builds, so we just define both
+
+add_library(twine_static STATIC ${SOURCE_FILES})
+set_twine_target_properties(twine_static)
 add_library(twine SHARED ${SOURCE_FILES})
-
-if (${TWINE_WITH_XENOMAI})
-    add_xenomai_to_target(twine)
-endif()
-if (${TWINE_WITH_EVL})
-    message("Building Twine with EVL")
-    target_compile_definitions(twine PUBLIC TWINE_BUILD_WITH_EVL)
-    set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
-endif()
-
-target_include_directories(twine PRIVATE ${PROJECT_BINARY_DIR}/generated)
-target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(twine PUBLIC ${TWINE_LINK_LIBRARIES})
-
-#Require users to have c++17 support
-target_compile_features(twine PUBLIC cxx_std_17)
-target_compile_options(twine PRIVATE -Wall -Wextra)
-target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
-
+set_twine_target_properties(twine)
 
 #######################
 #  Unit test targets  #
@@ -133,9 +149,6 @@ endif()
 #############
 #  Install  #
 #############
-
-set_target_properties(twine PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
-set_target_properties(twine PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 
 install(TARGETS twine
     ARCHIVE DESTINATION lib
