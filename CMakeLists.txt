@@ -12,14 +12,34 @@ project(twine
     VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
 )
 
+###########################
+#  Build and link options #
+###########################
+
+# The defaults enable all options and select APIs available for either Xenomai or macOS
+set(TWINE_WITH_XENOMAI_DEFAULT OFF)
+set(TWINE_WITH_TESTS_DEFAULT ON)
+set(TWINE_WITH_APPLE_COREAUDIO_DEFAULT OFF)
+
 ########################
 #  Build Options       #
 ########################
 
-option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" OFF)
-option(TWINE_WITH_TESTS "Build and run unit tests" ON)
+option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" ${TWINE_WITH_XENOMAI_DEFAULT})
+option(TWINE_WITH_TESTS "Build and run unit tests" ${TWINE_WITH_TESTS_DEFAULT})
+option(TWINE_WITH_APPLE_COREAUDIO "Enable Jack support" ${TWINE_WITH_APPLE_COREAUDIO_DEFAULT})
 
 set(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+
+###################
+# CoreAudio setup #
+###################
+if (${TWINE_WITH_APPLE_COREAUDIO})
+    message("Building with Apple CoreAudio support.")
+    # Compile definitions
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DTWINE_BUILD_WITH_APPLE_COREAUDIO)
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} "-framework CoreAudio")
+endif()
 
 #######################
 #  Cross compilation  #
@@ -82,11 +102,11 @@ endfunction()
 function(set_twine_target_properties target)
     target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
     target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
-    target_link_libraries(${target} PRIVATE pthread)
+    target_link_libraries(${target} PRIVATE pthread ${EXTRA_BUILD_LIBRARIES})
     target_compile_features(${target} PUBLIC cxx_std_17)
     target_compile_options(${target} PRIVATE -Wall -Wextra)
     set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
-    target_compile_definitions(${target} PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
+    target_compile_definitions(${target} PUBLIC ${EXTRA_COMPILE_DEFINITIONS} PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
     if (${TWINE_WITH_XENOMAI})
         add_xenomai_to_target(${target})
     endif()
@@ -108,7 +128,7 @@ set(SOURCE_FILES src/twine.cpp)
 
 add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)
-add_library(twine SHARED ${SOURCE_FILES})
+add_library(twine SHARED ${SOURCE_FILES} src/apple_threading.cpp)
 set_twine_target_properties(twine)
 
 #######################

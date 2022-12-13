@@ -37,6 +37,7 @@
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "twine_version.h"
+
 #include "worker_pool_implementation.h"
 #include "condition_variable_implementation.h"
 
@@ -87,13 +88,25 @@ void init_xenomai()
 #endif
 }
 
-std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores, bool disable_denormals, bool break_on_mode_sw)
+std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
+                                                           [[maybe_unused]] apple::AppleMultiThreadData apple_data,
+                                                           [[maybe_unused]] apple::WorkerErrorCallback worker_error_cb,
+                                                           bool disable_denormals,
+                                                           bool break_on_mode_sw)
 {
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores, disable_denormals, break_on_mode_sw);
+        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores,
+                                                                     apple_data,
+                                                                     worker_error_cb,
+                                                                     disable_denormals,
+                                                                     break_on_mode_sw);
     }
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals, break_on_mode_sw);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores,
+                                                                 apple_data,
+                                                                 worker_error_cb,
+                                                                 disable_denormals,
+                                                                 break_on_mode_sw);
 }
 
 std::chrono::nanoseconds current_rt_time()
@@ -114,7 +127,6 @@ void set_flush_denormals_to_zero()
 {
     denormals_intrinsic();
 }
-
 
 std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()
 {

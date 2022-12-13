@@ -27,9 +27,17 @@
 #include <cstring>
 #include <cerrno>
 #include <stdexcept>
+#include <string>
+
+#include "apple_threading.h"
 
 #include "thread_helpers.h"
 #include "twine_internal.h"
+
+#ifndef TWINE_BUILD_WITH_APPLE_COREAUDIO
+typedef void* os_workgroup_join_token_s;
+typedef void* os_workgroup_t;
+#endif
 
 namespace twine {
 
@@ -70,7 +78,7 @@ class BarrierWithTrigger
 public:
     TWINE_DECLARE_NON_COPYABLE(BarrierWithTrigger);
     /**
-     * @brief Multithread barrier with trigger functionality
+     * @brief Multi-thread barrier with trigger functionality
      */
     BarrierWithTrigger()
     {
@@ -231,17 +239,33 @@ class WorkerThread
 public:
     TWINE_DECLARE_NON_COPYABLE(WorkerThread);
 
-    WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
-                                         void*callback_data, std::atomic_bool& running_flag,
-                                         bool disable_denormals,
-                                         bool break_on_mode_sw): _barrier(barrier),
-                                                                  _callback(callback),
-                                                                  _callback_data(callback_data),
-                                                                  _running(running_flag),
-                                                                  _disable_denormals(disable_denormals),
-                                                                  _break_on_mode_sw(break_on_mode_sw)
+    WorkerThread(BarrierWithTrigger<type>& barrier,
+                 WorkerCallback callback,
+                 void* callback_data,
+                 [[maybe_unused]] apple::AppleMultiThreadData& apple_data,
+                 std::atomic_bool& running_flag,
+                 bool disable_denormals,
+                 bool break_on_mode_sw): _barrier(barrier),
+                                         _callback(callback),
+                                         _callback_data(callback_data),
+                                         _apple_data(apple_data),
+                                         _running(running_flag),
+                                         _disable_denormals(disable_denormals),
+                                         _break_on_mode_sw(break_on_mode_sw)
 
-    {}
+    {
+#if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
+        // The workgroup will be the same for all threads, so it only needs to be fetched once.
+        auto device_workgroup_result = twine::apple::get_device_workgroup(_apple_data.device_name);
+
+        if (device_workgroup_result.second != twine::apple::AppleThreadingStatus::OK)
+        {
+            _status = device_workgroup_result.second;
+        }
+
+        _p_workgroup = device_workgroup_result.first;
+#endif
+    }
 
     ~WorkerThread()
     {
@@ -258,21 +282,26 @@ public:
             return EINVAL;
         }
         _priority = sched_priority;
-        struct sched_param rt_params = {.sched_priority = sched_priority};
+
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
 
         pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
         pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
         pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
-        pthread_attr_setschedparam(&task_attributes, &rt_params);
+
         auto res = 0;
+
 #ifndef __APPLE__
+        struct sched_param rt_params = {.sched_priority = sched_priority};
+        pthread_attr_setschedparam(&task_attributes, &rt_params);
+
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
         res = pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
 #endif
+
         if (res == 0)
         {
             res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
@@ -285,6 +314,11 @@ public:
     {
         reinterpret_cast<WorkerThread<type>*>(data)->_internal_worker_function();
         return nullptr;
+    }
+
+    apple::AppleThreadingStatus init_status()
+    {
+        return _status;
     }
 
 private:
@@ -301,6 +335,60 @@ private:
             enable_break_on_mode_sw();
         }
 
+#ifdef TWINE_APPLE_THREADING
+        // IF the macOS version isn't 11.00, we want to at least set QoS.
+        // But if it IS 11.00, setting QoS isn't needed.
+        if (__builtin_available(macOS 10.10, *) && !__builtin_available(macOS 11.00, *))
+        {
+            // IF this is used on macOS that is not 11: try to set QoS.
+            int error = pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+            switch (error)
+            {
+                case 0: // Successful
+                {
+                    // No need to set to OK - it's the default value.
+                    break;
+                }
+                case EAGAIN:
+                {
+                    _status = apple::AppleThreadingStatus::QOS_EAGAIN;
+                    break;
+                }
+                case EPERM:
+                {
+                    _status = apple::AppleThreadingStatus::QOS_EPERM;
+                    break;
+                }
+                case EINVAL:
+                {
+                    _status = apple::AppleThreadingStatus::QOS_EINVAL;
+                    break;
+                }
+                default:
+                {
+                    _status = apple::AppleThreadingStatus::QOS_UNKNOWN;
+                    break;
+                }
+            }
+        }
+
+        auto init_status = initialize_thread(_apple_data, &_join_token, _p_workgroup);
+
+        if (init_status != apple::AppleThreadingStatus::OK)
+        {
+            // For earlier versions it wouldn't be able to fetch workgroup...
+            if (__builtin_available(macOS 11.00, *))
+            {
+                _status = init_status;
+            }
+            // ...meaning REALTIME_OK is the expected outcome:
+            else if (init_status != apple::AppleThreadingStatus::REALTIME_OK)
+            {
+                _status = init_status;
+            }
+        }
+#endif
+
         while (true)
         {
             _barrier.wait();
@@ -311,12 +399,26 @@ private:
             }
             _callback(_callback_data);
         }
+
+#if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
+        apple::leave_workgroup_if_needed(&_join_token, _p_workgroup);
+#endif
     }
 
     BarrierWithTrigger<type>&   _barrier;
     pthread_t                   _thread_handle{0};
     WorkerCallback              _callback;
     void*                       _callback_data;
+
+    apple::AppleMultiThreadData& _apple_data;
+
+#ifdef TWINE_APPLE_THREADING
+    os_workgroup_join_token_s   _join_token;
+    os_workgroup_t              _p_workgroup;
+#endif
+
+    std::atomic<apple::AppleThreadingStatus> _status {apple::AppleThreadingStatus::OK};
+
     const std::atomic_bool&     _running;
     bool                        _disable_denormals;
     int                         _priority {0};
@@ -330,11 +432,15 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
     explicit WorkerPoolImpl(int cores,
+                            [[maybe_unused]] apple::AppleMultiThreadData apple_data,
+                            [[maybe_unused]] apple::WorkerErrorCallback worker_error_cb,
                             bool disable_denormals,
                             bool break_on_mode_sw) : _no_cores(cores),
                                                      _cores_usage(cores, 0),
                                                      _disable_denormals(disable_denormals),
-                                                     _break_on_mode_sw(break_on_mode_sw)
+                                                     _break_on_mode_sw(break_on_mode_sw),
+                                                     _apple_data(apple_data),
+                                                     _worker_error_cb(worker_error_cb)
     {}
 
     ~WorkerPoolImpl()
@@ -344,9 +450,10 @@ public:
         _barrier.release_all();
     }
 
-    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
-                                int sched_priority=75,
-                                std::optional<int> cpu_id=std::nullopt) override
+    WorkerPoolStatus add_worker(WorkerCallback worker_cb,
+                                void* worker_data,
+                                int sched_priority = 75,
+                                std::optional<int> cpu_id = std::nullopt) override
     {
         int core = 0;
         if (cpu_id.has_value())
@@ -359,7 +466,7 @@ public:
         }
         else
         {
-            // If no core is specified, pick the first core with least usage
+            // If no core is specified, pick the first core with the least usage
             int min_idx = _no_cores - 1;
             int min_usage = _cores_usage[min_idx];
             for (int n = _no_cores-1; n >= 0; n--)
@@ -374,8 +481,13 @@ public:
             core = min_idx;
         }
 
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
-                                                           _disable_denormals, _break_on_mode_sw);
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier,
+                                                            worker_cb,
+                                                            worker_data,
+                                                            _apple_data,
+                                                            _running,
+                                                           _disable_denormals,
+                                                           _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
 
         _cores_usage[core]++;
@@ -387,6 +499,14 @@ public:
             _no_workers++;
             _workers.push_back(std::move(worker));
             _barrier.wait_for_all();
+
+            // Currently, potential failures in worker threads happen only during initialisation.
+            // If that changes in the future, checking the status only on start will not suffice.
+            auto& w = _workers.back();
+            if (w->init_status() != apple::AppleThreadingStatus::OK)
+            {
+                _worker_error_cb(w->init_status());
+            }
         }
         else
         {
@@ -419,6 +539,13 @@ private:
     bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
+
+    apple::AppleMultiThreadData _apple_data;
+
+    /**
+     * This is used to communicate Apple realtime / workgroup status to an external worker pool user.
+     */
+    apple::WorkerErrorCallback  _worker_error_cb;
 };
 
 }// namespace twine

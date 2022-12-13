@@ -18,6 +18,84 @@
 #include <memory>
 #include <chrono>
 #include <optional>
+#include <string>
+
+/**
+ * This logic switches the use of apple silicon-specific threading priorities and workgroups on/off,
+ *  throughout Twine.
+ *  By default it will always be on when building on Apple.
+ *  But you may want to temporarily bypass that here, for testing purposes.
+ */
+#ifdef __APPLE__
+#define TWINE_APPLE_THREADING
+#include <mach/mach_time.h>
+#include <mach/thread_act.h>
+
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+#include <os/workgroup.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <AudioUnit/AudioUnit.h>
+#endif
+
+namespace twine::apple
+{
+enum class AppleThreadingStatus
+{
+    OK = 0,
+    WG_CANCELLED = 1,
+    WG_FAILED = 2,
+    WG_SIZE_FAILED = 3,
+    FETCH_NAME_FAILED = 4,
+    PD_FAILED = 5,
+    PD_SIZE_FAILED = 6,
+    MACOS_11_NOT_DETECTED = 7,
+    INVALID_DEVICE_NAME_PASSED = 8,
+
+    REALTIME_OK = 9,
+    REALTIME_FAILED = 10,
+    NO_WORKGROUP_PASSED = 11,
+    WORKGROUP_ALREADY_CANCELLED = 12,
+
+    QOS_EAGAIN = 13,
+    QOS_EPERM = 14,
+    QOS_EINVAL = 15,
+    QOS_UNKNOWN = 16
+};
+
+typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
+
+/**
+ * A structure defining what data need to be stored for
+ * audio-rate worker threads forming part of the audio workgroup.
+ * This data is passed to Worker Pools - If on Apple.
+ * If not, it is excluded.
+ */
+struct AppleMultiThreadData
+{
+    // The CoreAudio device name, needed for fetching the workgroup ID.
+    std::string device_name;
+
+    // These are used by Apple real-time thread groups to calculate the thread periodicity.
+    // Make sure you set them to the values used in your audio application.
+    double current_sample_rate = 48000;
+    int chunk_size = 64;
+};
+
+}
+
+#else
+namespace twine::apple
+{
+enum class AppleThreadingStatus
+{
+    OK = 0
+};
+
+typedef void* AppleMultiThreadData;
+
+typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
+}
+#endif
 
 namespace twine {
 
@@ -85,6 +163,8 @@ public:
      * if construction fails.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
+     * @param apple_data A AppleMultiThreadData struct, with fields set for setting up Apple real-time threads.
+     * @param worker_error_cb The error callback function, to be invoked when there's an error in a worker thread.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
      *                          and DAC (denormals are zero) flags.
      * @param break_on_mode_sw If set, enables the break_on_mode_swich flag for every worker
@@ -94,6 +174,8 @@ public:
      * @return
      */
     static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
+                                                          [[maybe_unused]] apple::AppleMultiThreadData apple_data,
+                                                          [[maybe_unused]] apple::WorkerErrorCallback worker_error_cb,
                                                           bool disable_denormals = true,
                                                           bool break_on_mode_sw = false);
 
@@ -101,7 +183,7 @@ public:
 
     /**
      * @brief Add a worker to the pool
-     * @param worker_cb The worker callback function that will called by he worker
+     * @param worker_cb The worker callback function that will be called by the worker
      * @param worker_data A data pointer that will be passed to the worker callback
      * @param sched_priority Worker priority in [0, 100] (higher numbers mean higher priorities)
      * @param cpu_id Optional CPU core affinity preference. If left unspecified,
@@ -109,7 +191,8 @@ public:
      *
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
+    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb,
+                                        void* worker_data,
                                         int sched_priority=DEFAULT_SCHED_PRIORITY,
                                         std::optional<int> cpu_id=std::nullopt) = 0;
 
