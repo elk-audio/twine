@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
 set(TWINE_VERSION_MAJOR 0)
 set(TWINE_VERSION_MINOR 3)
-set(TWINE_VERSION_REVISION 2)
+set(TWINE_VERSION_REVISION 3)
 
 project(twine
     DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
@@ -19,7 +19,12 @@ project(twine
 # The defaults enable all options and select APIs available for either Xenomai or macOS
 set(TWINE_WITH_XENOMAI_DEFAULT OFF)
 set(TWINE_WITH_TESTS_DEFAULT ON)
+
+if (APPLE)
+set(TWINE_WITH_APPLE_COREAUDIO_DEFAULT ON)
+else()
 set(TWINE_WITH_APPLE_COREAUDIO_DEFAULT OFF)
+endif()
 
 ########################
 #  Build Options       #

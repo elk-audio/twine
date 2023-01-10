@@ -1,3 +1,7 @@
+## 0.3.3
+New Features:
+* On macOS, worker threads can now correctly use real-time settings, and thread workgroups on available platforms.
+
 ## 0.3.1
 New Features:
   * Worker priority and affinity is now settable per worker
@@ -7,7 +11,7 @@ Fixes:
 
 ## 0.3.0
 New Features:
-  * Tread pool uses semaphores for improved performance
+  * Thread pool uses semaphores for improved performance
   * Option to enable mode switch debugging on workers
 
 Fixes:
