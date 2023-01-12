@@ -103,7 +103,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
 
     auto devices = std::make_unique<AudioDeviceID[]>(size);
 
-    apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size,devices.get());
+    apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.get());
     if (apple_oss_status != noErr)
     {
         return {nullptr, AppleThreadingStatus::PD_FAILED};
@@ -138,7 +138,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
 
             os_workgroup_t _Nonnull workgroup;
 
-            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size,&workgroup);
+            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &workgroup);
             if (apple_oss_status != noErr)
             {
                 return {nullptr, AppleThreadingStatus::WG_FAILED};

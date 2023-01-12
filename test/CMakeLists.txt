@@ -9,23 +9,45 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 #  Unit Test Files  #
 #####################
 
-# Unit tests are build without xenomai regardles
+set(TEST_COMPILE_DEFINITIONS)
+
+SET(TEST_FILES unittests/twine_tests.cpp
+               unittests/worker_pool_tests.cpp
+               unittests/condition_variable_test.cpp)
+
+set(INCLUDE_DIRS ${INCLUDE_DIRS}
+                 ${PROJECT_SOURCE_DIR}/include
+                 ${PROJECT_SOURCE_DIR}/src
+                 ${PROJECT_SOURCE_DIR}/test/gtest/include
+                 ${CMAKE_BINARY_DIR}/generated)
+
+set(TEST_LINK_LIBRARIES
+        gtest
+        gtest_main
+        gmock
+        gmock_main
+        twine)
+
+# Unit tests are build without xenomai regardless
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 
-add_executable(unit_tests unittests/twine_tests.cpp
-                          unittests/worker_pool_tests.cpp
-                          unittests/condition_variable_test.cpp)
+if (${TWINE_WITH_APPLE_COREAUDIO})
+    set(TEST_FILES ${TEST_FILES}
+            test_utils/apple_coreaudio_mockup.cpp)
 
-target_include_directories(unit_tests PRIVATE  ${PROJECT_SOURCE_DIR}/include
-                                               ${PROJECT_SOURCE_DIR}/src
-                                               ${PROJECT_SOURCE_DIR}/test/gtest/include
-                                               ${CMAKE_BINARY_DIR}/generated)
+    set(TEST_COMPILE_DEFINITIONS ${TEST_COMPILE_DEFINITIONS} -DTWINE_BUILD_WITH_APPLE_COREAUDIO)
+    set(TEST_LINK_LIBRARIES ${TEST_LINK_LIBRARIES} "-framework CoreAudio")
+endif()
 
+add_executable(unit_tests ${TEST_FILES})
 
-target_link_libraries(unit_tests gtest gtest_main twine)
+target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS})
+target_compile_options(unit_tests PRIVATE -Wall -Wextra)
+target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
+target_link_libraries(unit_tests "${TEST_LINK_LIBRARIES}")
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)
-target_compile_options(unit_tests PRIVATE -Wall -Wextra)
+
 if (${TWINE_WITH_XENOMAI})
     target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
 endif()

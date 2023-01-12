@@ -124,7 +124,8 @@ endfunction()
 #  Library target  #
 ####################
 
-set(SOURCE_FILES src/twine.cpp)
+set(SOURCE_FILES src/twine.cpp
+                 src/apple_threading.cpp)
 
 # The best way to build both static & dynamic targets
 # would have been to reuse the existing objects as in:
@@ -133,7 +134,7 @@ set(SOURCE_FILES src/twine.cpp)
 
 add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)
-add_library(twine SHARED ${SOURCE_FILES} src/apple_threading.cpp)
+add_library(twine SHARED ${SOURCE_FILES})
 set_twine_target_properties(twine)
 
 #######################
@@ -147,7 +148,6 @@ endif()
 #############
 #  Install  #
 #############
-
 
 install(TARGETS twine
     ARCHIVE DESTINATION lib
