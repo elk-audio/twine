@@ -17,10 +17,12 @@
 
 #include <algorithm>
 #include <mutex>
+#include <string>
 #include <condition_variable>
 #include <exception>
 #include <cstring>
 #include <cassert>
+#include <cstdlib>
 
 #include <semaphore.h>
 
@@ -95,23 +97,27 @@ private:
 
 PosixSemaphoreConditionVariable::PosixSemaphoreConditionVariable() : _semaphore(nullptr)
 {
-    int idx = 0;
+    int retries = MAX_RETRIES;
+    std::srand(std::time(nullptr));
 
-    while (idx < MAX_RETRIES)
+    while (--retries > 0)
     {
-        std::string name = std::string(COND_VAR_BASE_NAME).append(std::to_string(idx++));
+        // To avoid name collisions, each semaphore has a randomized suffix added to it
+        std::string name = std::string(COND_VAR_BASE_NAME).append(std::to_string(std::rand()));
         _semaphore = sem_open(name.c_str(), O_CREAT | O_EXCL, 0, 0);
         if (_semaphore == SEM_FAILED)
         {
             if (errno != EEXIST)
             {
-                throw std::runtime_error("Failed to initialize RtConditionVariable");
+                auto err_str = std::string("Failed to initialize RtConditionVariable, ") + strerror(errno);
+                throw std::runtime_error(err_str.c_str());
             }
             continue;
         }
         _name = name;
         return;
     }
+    throw std::runtime_error("Failed to initialize RtConditionVariable, no more retries.");
 }
 
 PosixSemaphoreConditionVariable::~PosixSemaphoreConditionVariable()
