@@ -11,7 +11,7 @@ int  get_next_id();
 void deregister_id(int id);
 }
 
-bool flag = false;
+std::atomic_bool flag = false;
 
 void test_function(RtConditionVariable* cond_var)
 {
@@ -37,14 +37,14 @@ TEST_F(RtConditionVariableTest, FunctionalityTest)
     flag = false;
     std::thread thread(test_function, _module_under_test.get());
 
-    ASSERT_FALSE(flag);
-    std::this_thread::sleep_for(std::chrono::microseconds(500));
+    EXPECT_FALSE(flag);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    ASSERT_FALSE(flag);
+    EXPECT_FALSE(flag);
     _module_under_test->notify();
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-    ASSERT_TRUE(flag);
+    EXPECT_TRUE(flag);
     thread.join();
 }
 

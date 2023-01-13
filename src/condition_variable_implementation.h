@@ -126,7 +126,6 @@ PosixSemaphoreConditionVariable::~PosixSemaphoreConditionVariable()
     {
         this->notify();
         sem_unlink(_name.c_str());
-        sem_destroy(_semaphore);
     }
 }
 
