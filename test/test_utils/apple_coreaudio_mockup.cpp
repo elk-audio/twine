@@ -1,4 +1,4 @@
-#include <CoreAudio/AudioHardware.h>
+//#include <CoreAudio/AudioHardware.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-completeness"// Ignore Apple nonsense
@@ -108,9 +108,20 @@ OSStatus AudioObjectRemovePropertyListener(AudioObjectID audio_object_id,
     return AppleAudioHardwareMockup::instance->AudioObjectRemovePropertyListener(audio_object_id, address, listener, client_data);
 }
 
-// This isn't strictly a CoreAudio API method, but for the sake of simplicity it is included here.
-// It is used in conjunction with the CoreAudio threading methods.
+// These aren't strictly CoreAudio API methods, but for the sake of simplicity they are included here.
+// All are used in conjunction with the CoreAudio threading methods.
+
+int os_workgroup_join(os_workgroup_t wg, os_workgroup_join_token_t token_out)
+{
+    return AppleAudioHardwareMockup::instance->os_workgroup_join(wg, token_out);
+}
+
 bool os_workgroup_testcancel(os_workgroup_t wg)
 {
     return AppleAudioHardwareMockup::instance->os_workgroup_testcancel(wg);
+}
+
+mach_port_t pthread_mach_thread_np(pthread_t thread)
+{
+    return AppleAudioHardwareMockup::instance->pthread_mach_thread_np(thread);
 }

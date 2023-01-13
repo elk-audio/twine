@@ -25,18 +25,12 @@
 
 #include <pthread.h>
 
-/**
- * Internal methods for setting to the highest thread priority on Apple silicon.
- */
-namespace {
 
-/**
- * @brief Sets the thread to realtime - with explicit periodicity defined for Apple.
- *        This is a prerequisite for it to then join the audio thread workgroup.
- * @param period_ms
- * @return status bool
- */
-bool _set_current_thread_to_realtime(double period_ms)
+namespace twine::apple {
+
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+
+bool set_current_thread_to_realtime(double period_ms)
 {
     const auto thread = pthread_self();
 
@@ -69,16 +63,10 @@ bool _set_current_thread_to_realtime(double period_ms)
     bool status = thread_policy_set(pthread_mach_thread_np(thread),
                                     THREAD_TIME_CONSTRAINT_POLICY,
                                     reinterpret_cast<thread_policy_t>(&policy),
-                                    THREAD_TIME_CONSTRAINT_POLICY_COUNT) == KERN_SUCCESS;
+                                    THREAD_TIME_CONSTRAINT_POLICY_COUNT);
 
-    return status;
+    return status == KERN_SUCCESS;
 }
-
-} // Anonymous namespace
-
-namespace twine::apple {
-
-#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
 
 std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::string& device_name)
 {
@@ -168,20 +156,9 @@ void leave_workgroup_if_needed(os_workgroup_join_token_s* join_token,
 
 #endif
 
-AppleThreadingStatus initialize_thread(AppleMultiThreadData& worker_data,
-                                       os_workgroup_join_token_s* join_token,
+AppleThreadingStatus initialize_thread(os_workgroup_join_token_s* join_token,
                                        os_workgroup_t p_workgroup)
 {
-    double period_ms = std::max(1000.0 * worker_data.chunk_size / worker_data.current_sample_rate,
-                                1.0);
-
-    bool set_to_realtime_status = _set_current_thread_to_realtime(period_ms);
-
-    if (!set_to_realtime_status)
-    {
-        return AppleThreadingStatus::REALTIME_FAILED;
-    }
-
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     if (p_workgroup == nullptr)
     {

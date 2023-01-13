@@ -372,7 +372,17 @@ private:
             }
         }
 
-        auto init_status = initialize_thread(_apple_data, &_join_token, _p_workgroup);
+        double period_ms = std::max(1000.0 * _apple_data.chunk_size / _apple_data.current_sample_rate,
+                                    1.0);
+
+        bool set_to_realtime_status = apple::set_current_thread_to_realtime(period_ms);
+
+        if (!set_to_realtime_status)
+        {
+            _status = apple::AppleThreadingStatus::REALTIME_FAILED;
+        }
+
+        auto init_status = apple::initialize_thread(&_join_token, _p_workgroup);
 
         if (init_status != apple::AppleThreadingStatus::OK)
         {

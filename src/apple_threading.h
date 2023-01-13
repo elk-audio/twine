@@ -56,8 +56,15 @@ typedef void* os_workgroup_t;
 #endif
 
 /**
- * @brief Sets the thread to realtime, and joins the audio thread workgroup if possible
- * @param worker_data WorkgroupMemberData structure.
+ * @brief Sets the thread to realtime - with explicit periodicity defined for Apple.
+ *        This is a prerequisite for it to then join the audio thread workgroup.
+ * @param period_ms
+ * @return status bool
+ */
+bool set_current_thread_to_realtime(double period_ms);
+
+/**
+ * @brief Assuming the thread IS realtime, it joins the audio thread workgroup if possible
  * @param join_token A join_token pointer, where the workgroup join token will be stored for the current thread.
  * @param p_workgroup the workgroup to join.
  * @return The status of the initialization.
@@ -65,8 +72,7 @@ typedef void* os_workgroup_t;
  *         At setting the thread to real-time,
  *         and subsequently, at joining workgroup.
  */
-AppleThreadingStatus initialize_thread(AppleMultiThreadData& worker_data,
-                                       os_workgroup_join_token_s* join_token,
+AppleThreadingStatus initialize_thread(os_workgroup_join_token_s* join_token,
                                        os_workgroup_t p_workgroup);
 
 } // Twine Apple namespace

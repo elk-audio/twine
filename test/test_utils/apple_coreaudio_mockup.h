@@ -2,6 +2,7 @@
 #define SUSHI_APPLE_COREAUDIO_MOCKUP_H
 
 #include <CoreAudio/AudioHardware.h>
+#include <mach/mach_types.h>
 
 #include <gmock/gmock.h>
 
@@ -23,6 +24,9 @@ public:
     MOCK_METHOD(OSStatus, AudioObjectRemovePropertyListener, (AudioObjectID inObjectID, const AudioObjectPropertyAddress* inAddress, AudioObjectPropertyListenerProc inListener, void* __nullable inClientData));
 
     MOCK_METHOD(bool, os_workgroup_testcancel, (os_workgroup_t wg));
+    MOCK_METHOD(int, os_workgroup_join, (os_workgroup_t wg, os_workgroup_join_token_t token_out));
+
+    MOCK_METHOD(mach_port_t, pthread_mach_thread_np, (pthread_t));
 
     static AppleAudioHardwareMockup* instance;
 };
