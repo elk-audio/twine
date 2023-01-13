@@ -28,7 +28,7 @@
 
 namespace twine::apple {
 
-std::string statusToString(AppleThreadingStatus status);
+std::string status_to_string(AppleThreadingStatus status);
 
 // CoreAudio is needed to fetch the thread workgroup for the audio device specified.
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
@@ -39,7 +39,7 @@ std::string statusToString(AppleThreadingStatus status);
  * @return A pair. First, the os_workgroup_t found. Apparently this can be nullptr, on failure.
  *                 Second, the status of the operation, useful for diagnosing/reporting failure.
  */
-std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::string& device_name);
+[[nodiscard]] std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::string& device_name);
 
 /**
  * @brief This removes the current thread from a workgroup, if it has previously joined it.
@@ -58,22 +58,22 @@ typedef void* os_workgroup_t;
 /**
  * @brief Sets the thread to realtime - with explicit periodicity defined for Apple.
  *        This is a prerequisite for it to then join the audio thread workgroup.
- * @param period_ms
+ * @param period_ms the thread period in ms.
  * @return status bool
  */
-bool set_current_thread_to_realtime(double period_ms);
+[[nodiscard]] bool set_current_thread_to_realtime(double period_ms);
 
 /**
- * @brief Assuming the thread IS realtime, it joins the audio thread workgroup if possible
- * @param join_token A join_token pointer, where the workgroup join token will be stored for the current thread.
+ * @brief Assuming the thread IS set to realtime, using the above 'set_current_thread_to_realtime',
+ *        calling this method from the thread joins it to the audio thread workgroup if possible.
+ *        If called with a non-realtime thread, joining will fail.
  * @param p_workgroup the workgroup to join.
- * @return The status of the initialization.
+ * @return The status of the initialization, and the join_token - which is only valid on success.
  *         The operation can fail at two stages:
  *         At setting the thread to real-time,
  *         and subsequently, at joining workgroup.
  */
-AppleThreadingStatus initialize_thread(os_workgroup_join_token_s* join_token,
-                                       os_workgroup_t p_workgroup);
+[[nodiscard]] std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup(os_workgroup_t p_workgroup);
 
 } // Twine Apple namespace
 

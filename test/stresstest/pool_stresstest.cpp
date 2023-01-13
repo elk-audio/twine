@@ -106,21 +106,6 @@ void worker_function(void* data)
     process_data->count++;
 }
 
-std::string to_error_string(twine::WorkerPoolStatus status)
-{
-    switch (status)
-    {
-        case twine::WorkerPoolStatus::PERMISSION_DENIED:
-            return "Permission denied";
-
-        case twine::WorkerPoolStatus::LIMIT_EXCEEDED:
-            return "Thread count limit exceeded";
-
-        default:
-            return "Error";
-    }
-}
-
 #ifdef TWINE_BUILD_WITH_XENOMAI
 void xenomai_thread_init()
 {

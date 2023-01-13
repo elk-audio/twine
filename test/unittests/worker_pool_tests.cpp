@@ -72,17 +72,17 @@ TEST (BarrierTest, TestBarrierWithTrigger)
 class PthreadWorkerPoolTest : public ::testing::Test
 {
 protected:
-    void SetUp()
+    void SetUp() override
     {
         AppleAudioHardwareMockup::instance = &_mock;
     }
 
-    void TearDown()
+    void TearDown() override
     {
     }
 
-    apple::AppleMultiThreadData apple_data;
-    apple::WorkerErrorCallback worker_error_cb {[](apple::AppleThreadingStatus){}};
+    apple::AppleMultiThreadData apple_data {"AudioDeviceName", 64, 48000};
+    apple::WorkerErrorCallback worker_error_cb {[]([[maybe_unused]] apple::AppleThreadingStatus){}};
 
     WorkerPoolImpl<ThreadType::PTHREAD> _module_under_test {N_TEST_WORKERS,
                                                             apple_data,
@@ -246,12 +246,12 @@ TEST_F(PthreadWorkerPoolTest, TestManualAffinityOutOfRange)
 class AppleThreadingTest : public ::testing::Test
 {
 protected:
-    void SetUp()
+    void SetUp() override
     {
         AppleAudioHardwareMockup::instance = &_mock;
     }
 
-    void TearDown()
+    void TearDown() override
     {
     }
 
@@ -291,6 +291,19 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupSuccess)
 
                 return kAudioHardwareNoError;
             })
+            // Getting the size of the name:
+            .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+                EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+
+                EXPECT_NE(address, nullptr);
+                EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+                EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+                EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
+
+                *out_data_size = sizeof(test_device_name);
+
+                return kAudioHardwareNoError;
+            })
             // Getting the size of workgroup:
             .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
                 // The mocked test doesn't create a workgroup instance to compare against here.
@@ -319,7 +332,7 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupSuccess)
             return noErr;
         })
         // Getting the device name:
-        .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
+        .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data) {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
@@ -328,6 +341,9 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupSuccess)
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             strcpy((char*)out_data, test_device_name);
+
+            *size = sizeof(test_device_name);
+
             return noErr;
         })
         // Getting the workgroup:
@@ -357,13 +373,15 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
     apple_data.device_name = "AudioDeviceName";
 
     EXPECT_CALL(_mock, AudioObjectGetPropertyDataSize)
-// First invocation:
+
+    // First invocation:
     // Pretending failure in getting the size of devices:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         return 10;
     })
-// Second Invocation:
+
+    // Second Invocation:
     // Subsequent invocation can go well, so that devices size can fail.
     .WillOnce(Return(noErr))
     // Getting the size of devices - pretending there's one device, so that getting name can fail:
@@ -372,11 +390,26 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
         *out_data_size = 4;
         return kAudioHardwareNoError;
     })
-// Third invocation:
+    // Getting the size of the name:
+    .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+        EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        *out_data_size = sizeof(test_device_name);
+        return kAudioHardwareNoError;
+    })
+
+    // Third invocation:
     // Getting the size of devices - pretending there's one device, so that getting workgroup size can fail:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         *out_data_size = 4;
+        return kAudioHardwareNoError;
+    })
+    // Getting the size of the name:
+    .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+        EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        *out_data_size = sizeof(test_device_name);
         return kAudioHardwareNoError;
     })
     // Pretending failure in getting the size of workgroup:
@@ -384,45 +417,68 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
         EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
         return 10;
     })
-// Fourth Invocation:
+
+    // Fourth Invocation:
     // Getting the size of devices - pretending there's one device:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         *out_data_size = static_cast<int>(sizeof(AudioObjectPropertyAddress));
+        return kAudioHardwareNoError;
+    })
+    // Getting the size of the name:
+    .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+        EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        *out_data_size = sizeof(test_device_name);
         return kAudioHardwareNoError;
     })
     // Getting the size of workgroup can succeed, so that getting workgroup can fail:
     .WillOnce(Return(noErr))
-// Fifth Invocation:
+
+    // Fifth Invocation:
     // Getting the size of devices - pretending there's one device:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         *out_data_size = static_cast<int>(sizeof(AudioObjectPropertyAddress));
         return kAudioHardwareNoError;
     })
+    // Getting the size of the name:
+    .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+        EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        *out_data_size = sizeof(test_device_name);
+        return kAudioHardwareNoError;
+    })
     // Getting the size of workgroup can succeed, so that workgroup cancellation status can fail:
     .WillOnce(Return(noErr))
-// Sixth Invocation:
+
+    // Sixth Invocation:
     // Getting the size of devices - pretending there's one device:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         *out_data_size = 4;
         return kAudioHardwareNoError;
+    })
+    // Getting the size of the name:
+    .WillOnce([=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size) {
+        EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        *out_data_size = sizeof(test_device_name);
+        return kAudioHardwareNoError;
     });
 
-
     EXPECT_CALL(_mock, AudioObjectGetPropertyData)
-// Second invocation:
+
+    // Second invocation:
     // Pretending failure in getting the devices data structure:
     .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void*) {
         EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
         return 10;
     })
-// Third invocation:
+
+    // Third invocation:
     // Allowing getting data structure to succeed...
-    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
-        EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
-        EXPECT_EQ(sizeof(out_data), sizeof(test_device_ids));
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress*, UInt32, const void*, UInt32*, void* out_data) {
         memcpy(out_data, test_device_ids, sizeof(test_device_ids));
         return noErr;
     })
@@ -431,22 +487,32 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
         EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
         return 10;
     })
-// Fourth invocation:
-    // Now data structure can succeed.
-    .WillOnce(Return(noErr))
-    // As can getting the device name:
-    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
-        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-        strcpy((char*)out_data, test_device_name);
+
+    // Fourth invocation:
+    // Allowing getting data structure to succeed...
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress*, UInt32, const void*, UInt32*, void* out_data) {
+        memcpy(out_data, test_device_ids, sizeof(test_device_ids));
         return noErr;
     })
-// Fifth invocation:
-    // Now data structure can succeed.
-    .WillOnce(Return(noErr))
     // As can getting the device name:
-    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data) {
         EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
         strcpy((char*)out_data, test_device_name);
+        *size = sizeof(test_device_name);
+        return noErr;
+    })
+
+    // Fifth invocation:
+    // Allowing getting data structure to succeed...
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress*, UInt32, const void*, UInt32*, void* out_data) {
+        memcpy(out_data, test_device_ids, sizeof(test_device_ids));
+        return noErr;
+    })
+    // As can getting the device name:
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data) {
+        EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+        strcpy((char*)out_data, test_device_name);
+        *size = sizeof(test_device_name);
         return noErr;
     })
     // So that getting workgroup can fail
@@ -455,28 +521,38 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
         EXPECT_EQ(sizeof(out_data), sizeof(test_workgroup));
         return 10;
     })
-// Sixth invocation:
-    // Data structure can succeed.
-    .WillOnce(Return(noErr))
+
+    // Sixth invocation:
+    // Allowing getting data structure to succeed...
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress*, UInt32, const void*, UInt32*, void* out_data) {
+        memcpy(out_data, test_device_ids, sizeof(test_device_ids));
+        return noErr;
+    })
     // As can getting the device name:
-    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data) {
         EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
         strcpy((char*)out_data, test_device_name);
+        *size = sizeof(test_device_name);
         return noErr;
     })
     // And getting workgroup.
     .WillOnce(Return(noErr))
-// Seventh invocation:
-    // Data structure can succeed.
-    .WillOnce(Return(noErr))
-    // And getting the device name succeeds, BUT RETURNS ON THAT WON'T MATCH:
-    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data) {
+
+    // Seventh invocation:
+    // Allowing getting data structure to succeed...
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress*, UInt32, const void*, UInt32*, void* out_data) {
+        memcpy(out_data, test_device_ids, sizeof(test_device_ids));
+        return noErr;
+    })
+    // And getting the device name succeeds, BUT RETURNS ONE THAT WON'T MATCH:
+    .WillOnce([=](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data) {
         EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
         strcpy((char*)out_data, test_device_name);
+        *size = sizeof(test_device_name);
         return noErr;
     });
 
-// Letting the fetching of workgroup cancellation status fail (sixth)
+    // Letting the fetching of workgroup cancellation status fail (sixth)
     EXPECT_CALL(_mock, os_workgroup_testcancel).WillOnce(Return(true));
 
     auto device_workgroup_result = twine::apple::get_device_workgroup(apple_data.device_name);
@@ -502,13 +578,45 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
     EXPECT_EQ(device_workgroup_result.second, twine::apple::AppleThreadingStatus::INVALID_DEVICE_NAME_PASSED);
 }
 
-TEST_F(AppleThreadingTest, TestThreadInitializationSuccess)
+TEST_F(AppleThreadingTest, TestThreadWorkgroupJoinSuccess)
 {
-    EXPECT_CALL(_mock, os_workgroup_join).WillOnce(Return(true));
+    EXPECT_CALL(_mock, os_workgroup_join).WillOnce(Return(0)); // 0 for success
     EXPECT_CALL(_mock, os_workgroup_testcancel).WillOnce(Return(false));
 
-    auto status = twine::apple::initialize_thread(test_join_token, test_workgroup);
-    EXPECT_EQ(status, twine::apple::AppleThreadingStatus::OK);
+    auto result = twine::apple::join_workgroup(test_workgroup);
+    EXPECT_EQ(result.first, twine::apple::AppleThreadingStatus::OK);
 }
+
+TEST_F(AppleThreadingTest, TestThreadWorkgroupJoinFailure)
+{
+    EXPECT_CALL(_mock, os_workgroup_testcancel)
+
+    // First execution, testing cancellation:
+    .WillOnce(Return(true))
+
+    // Second execution, testing already cancelled
+    .WillOnce(Return(false))
+
+    // Third execution, testing already cancelled
+    .WillOnce(Return(false));
+
+    EXPECT_CALL(_mock, os_workgroup_join)
+
+    // Second execution, testing already cancelled when attempting to join
+    .WillOnce(Return(EINVAL))
+
+    // Second execution, testing unknown WG failure
+    .WillOnce(Return(10));
+
+    auto result = twine::apple::join_workgroup(test_workgroup);
+    EXPECT_EQ(result.first, twine::apple::AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED);
+
+    result = twine::apple::join_workgroup(test_workgroup);
+    EXPECT_EQ(result.first, twine::apple::AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED);
+
+    result = twine::apple::join_workgroup(test_workgroup);
+    EXPECT_EQ(result.first, twine::apple::AppleThreadingStatus::WORKGROUP_JOINING_UNKNOWN_FAILURE);
+}
+
 
 #endif

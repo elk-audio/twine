@@ -89,8 +89,8 @@ void init_xenomai()
 }
 
 std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
-                                                           [[maybe_unused]] apple::AppleMultiThreadData apple_data,
-                                                           [[maybe_unused]] apple::WorkerErrorCallback worker_error_cb,
+                                                           apple::AppleMultiThreadData apple_data,
+                                                           apple::WorkerErrorCallback worker_error_cb,
                                                            bool disable_denormals,
                                                            bool break_on_mode_sw)
 {
@@ -126,6 +126,21 @@ std::chrono::nanoseconds current_rt_time()
 void set_flush_denormals_to_zero()
 {
     denormals_intrinsic();
+}
+
+std::string to_error_string(twine::WorkerPoolStatus status)
+{
+    switch (status)
+    {
+        case twine::WorkerPoolStatus::PERMISSION_DENIED:
+            return "Permission denied";
+
+        case twine::WorkerPoolStatus::LIMIT_EXCEEDED:
+            return "Thread count limit exceeded";
+
+        default:
+            return "Error";
+    }
 }
 
 std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()

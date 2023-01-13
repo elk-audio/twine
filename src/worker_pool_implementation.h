@@ -242,7 +242,7 @@ public:
     WorkerThread(BarrierWithTrigger<type>& barrier,
                  WorkerCallback callback,
                  void* callback_data,
-                 [[maybe_unused]] apple::AppleMultiThreadData& apple_data,
+                 apple::AppleMultiThreadData& apple_data,
                  std::atomic_bool& running_flag,
                  bool disable_denormals,
                  bool break_on_mode_sw): _barrier(barrier),
@@ -336,9 +336,28 @@ private:
         }
 
 #ifdef TWINE_APPLE_THREADING
-        // IF the macOS version isn't 11.00, we want to at least set QoS.
-        // But if it IS 11.00, setting QoS isn't needed.
-        if (__builtin_available(macOS 10.10, *) && !__builtin_available(macOS 11.00, *))
+        assert(_apple_data.chunk_size != 0);
+        assert(_apple_data.current_sample_rate != 0);
+
+        double period_ms = std::max(1000.0 * _apple_data.chunk_size / _apple_data.current_sample_rate,
+                                    1.0);
+
+        if (apple::set_current_thread_to_realtime(period_ms) == false)
+        {
+            _status = apple::AppleThreadingStatus::REALTIME_FAILED;
+        }
+
+        if (__builtin_available(macOS 11.00, *))
+        {
+            apple::AppleThreadingStatus status;
+
+            std::tie(status, _join_token) = apple::join_workgroup(_p_workgroup);
+            if (status != apple::AppleThreadingStatus::OK)
+            {
+                _status = status;
+            }
+        }
+        else if (__builtin_available(macOS 10.10, *))
         {
             // IF this is used on macOS that is not 11: try to set QoS.
             int error = pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
@@ -371,32 +390,6 @@ private:
                 }
             }
         }
-
-        double period_ms = std::max(1000.0 * _apple_data.chunk_size / _apple_data.current_sample_rate,
-                                    1.0);
-
-        bool set_to_realtime_status = apple::set_current_thread_to_realtime(period_ms);
-
-        if (!set_to_realtime_status)
-        {
-            _status = apple::AppleThreadingStatus::REALTIME_FAILED;
-        }
-
-        auto init_status = apple::initialize_thread(&_join_token, _p_workgroup);
-
-        if (init_status != apple::AppleThreadingStatus::OK)
-        {
-            // For earlier versions it wouldn't be able to fetch workgroup...
-            if (__builtin_available(macOS 11.00, *))
-            {
-                _status = init_status;
-            }
-            // ...meaning REALTIME_OK is the expected outcome:
-            else if (init_status != apple::AppleThreadingStatus::REALTIME_OK)
-            {
-                _status = init_status;
-            }
-        }
 #endif
 
         while (true)
@@ -416,7 +409,7 @@ private:
     }
 
     BarrierWithTrigger<type>&   _barrier;
-    pthread_t                   _thread_handle{0};
+    pthread_t                   _thread_handle {0};
     WorkerCallback              _callback;
     void*                       _callback_data;
 
@@ -462,7 +455,7 @@ public:
 
     WorkerPoolStatus add_worker(WorkerCallback worker_cb,
                                 void* worker_data,
-                                int sched_priority = 75,
+                                int sched_priority = DEFAULT_SCHED_PRIORITY,
                                 std::optional<int> cpu_id = std::nullopt) override
     {
         int core = 0;
