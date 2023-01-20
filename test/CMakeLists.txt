@@ -10,7 +10,7 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 #####################
 
 # Unit tests are build without xenomai regardles
-remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
+# remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
 
 add_executable(unit_tests unittests/twine_tests.cpp
                           unittests/worker_pool_tests.cpp
@@ -22,12 +22,14 @@ target_include_directories(unit_tests PRIVATE  ${PROJECT_SOURCE_DIR}/include
                                                ${CMAKE_BINARY_DIR}/generated)
 
 
-target_link_libraries(unit_tests gtest gtest_main twine)
+target_link_libraries(unit_tests gtest gtest_main)
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)
 target_compile_options(unit_tests PRIVATE -Wall -Wextra)
+
+
 if (${TWINE_WITH_XENOMAI})
-    target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
+    #target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
 endif()
 
 add_test(unit_tests unit_tests)

@@ -91,8 +91,8 @@ public:
         }
         else if constexpr (type == ThreadType::COBALT)
         {
-#ifdef TWINE_BUILD_WITH_COBALT
-            _thread_helper = new PosixThreadHelper();
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
 
             _semaphores[0] = new PosixSemaphore();
             _semaphores[1] = new PosixSemaphore();
@@ -274,8 +274,8 @@ public:
         }
         else if constexpr (type == ThreadType::COBALT)
         {
-#ifdef TWINE_BUILD_WITH_COBALT
-            _thread_helper = new PosixThreadHelper();
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
 #else
             assert(false && "Not built with Cobalt support");
 #endif

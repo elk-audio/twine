@@ -62,8 +62,7 @@ struct BaseSemaphore
 class BaseThreadHelper
 {
 public:
-    virtual ~BaseThreadHelper() = 0;
-
+    virtual ~BaseThreadHelper();
 
     virtual int mutex_create(BaseMutex* mutex) = 0;
 
@@ -83,7 +82,7 @@ public:
 
     virtual int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) = 0;
 
-    virtual int thread_join(pthread_t thread, void** return_var = nullptr) = 0;
+    virtual int thread_join(pthread_t thread, void** return_var) = 0;
 
     virtual int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) = 0;
 
@@ -98,6 +97,9 @@ public:
 class PosixThreadHelper : public BaseThreadHelper
 {
 public:
+    PosixThreadHelper() = default;
+    virtual ~PosixThreadHelper() override {};
+
 
     int mutex_create(BaseMutex* mutex) override;
 
@@ -117,7 +119,7 @@ public:
 
     int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
 
-    int thread_join(pthread_t thread, void** return_var = nullptr) override;
+    int thread_join(pthread_t thread, void** return_var) override;
 
     int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
 
@@ -167,6 +169,8 @@ inline sem_t* to_posix_sem(BaseSemaphore* semaphore)
 class CobaltThreadHelper : public BaseThreadHelper
 {
 public:
+    CobaltThreadHelper() = default;
+    virtual ~CobaltThreadHelper() override {};
 
     int mutex_create(BaseMutex* mutex) override;
 
@@ -186,7 +190,7 @@ public:
 
     int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
 
-    int thread_join(pthread_t thread, void** return_var = nullptr) override;
+    int thread_join(pthread_t thread, void** return_var) override;
 
     int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name) override;
 

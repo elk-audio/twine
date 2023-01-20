@@ -3,6 +3,10 @@
 #include "gtest/gtest.h"
 
 #include "twine.cpp"
+#include "thread_helpers_posix.cpp"
+#ifdef TWINE_BUILD_WITH_XENOMAI
+#include "thread_helpers_xenomai.cpp"
+#endif
 #include "twine_version.h"
 
 using namespace twine;

@@ -51,7 +51,7 @@ int CobaltThreadHelper::thread_create(pthread_t* thread, const pthread_attr_t* a
     return __cobalt_pthread_create(thread, attributes, entry_fun, argument);
 }
 
-int CobaltThreadHelper::thread_join(pthread_t thread, void** return_var = nullptr)
+int CobaltThreadHelper::thread_join(pthread_t thread, void** return_var)
 {
     return __cobalt_pthread_join(thread, return_var);
 }
