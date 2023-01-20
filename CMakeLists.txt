@@ -90,6 +90,10 @@ set(EXTRA_CLION_SOURCES  include/twine/twine.h
 
 set(SOURCE_FILES "${COMPILATION_UNITS}" "${EXTRA_CLION_SOURCES}")
 
+if (${TWINE_WITH_XENOMAI})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
+endif()
+
 add_library(twine SHARED ${SOURCE_FILES})
 
 target_include_directories(twine PRIVATE ${PROJECT_BINARY_DIR}/generated)
@@ -102,7 +106,6 @@ target_compile_options(twine PRIVATE -Wall -Wextra)
 target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
 
 if (${TWINE_WITH_XENOMAI})
-    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
     add_xenomai_to_target(twine)
 endif()
 
