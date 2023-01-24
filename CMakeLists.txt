@@ -130,21 +130,6 @@ if (${TWINE_WITH_XENOMAI})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
 endif()
 
-add_library(twine SHARED ${SOURCE_FILES})
-
-target_include_directories(twine PRIVATE ${PROJECT_BINARY_DIR}/generated)
-target_include_directories(twine PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(twine PRIVATE pthread)
-
-#Require users to have c++17 support
-target_compile_features(twine PUBLIC cxx_std_17)
-target_compile_options(twine PRIVATE -Wall -Wextra)
-target_compile_definitions(twine PRIVATE TWINE_MAX_XENOMAI_RTP_DEVICES=${TWINE_MAX_RT_CONDITION_VARS})
-
-if (${TWINE_WITH_XENOMAI})
-    add_xenomai_to_target(twine)
-endif()
-
 if (${TWINE_WITH_EVL})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_evl.cpp)
 endif()
