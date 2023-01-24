@@ -26,7 +26,14 @@
 #include <optional>
 #include <string>
 
-namespace twine::apple {
+namespace twine {
+
+#ifndef TWINE_BUILD_WITH_APPLE_COREAUDIO
+typedef void* os_workgroup_join_token_s;
+typedef void* os_workgroup_t;
+#endif
+
+namespace apple {
 
 std::string status_to_string(AppleThreadingStatus status);
 
@@ -50,9 +57,6 @@ std::string status_to_string(AppleThreadingStatus status);
  */
 void leave_workgroup_if_needed(os_workgroup_join_token_s* join_token,
                                os_workgroup_t p_workgroup);
-#else
-typedef void* os_workgroup_join_token_s;
-typedef void* os_workgroup_t;
 #endif
 
 /**
@@ -75,7 +79,7 @@ typedef void* os_workgroup_t;
  */
 [[nodiscard]] std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup(os_workgroup_t p_workgroup);
 
-} // Twine Apple namespace
+}} // Twine Apple namespace
 
 #endif // TWINE_APPLE_THREADING
 

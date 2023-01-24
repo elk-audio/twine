@@ -26,7 +26,6 @@
 #include <pthread.h>
 #include <vector>
 
-
 namespace twine::apple {
 
 bool set_current_thread_to_realtime(double period_ms)

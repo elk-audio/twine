@@ -90,7 +90,6 @@ void init_xenomai()
 
 std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
                                                            apple::AppleMultiThreadData apple_data,
-                                                           apple::WorkerErrorCallback worker_error_cb,
                                                            bool disable_denormals,
                                                            bool break_on_mode_sw)
 {
@@ -98,13 +97,11 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
     {
         return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores,
                                                                      apple_data,
-                                                                     worker_error_cb,
                                                                      disable_denormals,
                                                                      break_on_mode_sw);
     }
     return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores,
                                                                  apple_data,
-                                                                 worker_error_cb,
                                                                  disable_denormals,
                                                                  break_on_mode_sw);
 }

@@ -62,7 +62,9 @@ enum class AppleThreadingStatus
     QOS_EAGAIN = 15,
     QOS_EPERM = 16,
     QOS_EINVAL = 17,
-    QOS_UNKNOWN = 18
+    QOS_UNKNOWN = 18,
+
+    EMPTY = 19
 };
 
 typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
@@ -173,7 +175,6 @@ public:
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
      * @param apple_data A AppleMultiThreadData struct, with fields set for setting up Apple real-time threads.
-     * @param worker_error_cb The error callback function, to be invoked when there's an error in a worker thread.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
      *                          and DAC (denormals are zero) flags.
      * @param break_on_mode_sw If set, enables the break_on_mode_swich flag for every worker
@@ -184,7 +185,6 @@ public:
      */
     [[nodiscard]] static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
                                                                         apple::AppleMultiThreadData apple_data,
-                                                                        apple::WorkerErrorCallback worker_error_cb,
                                                                         bool disable_denormals = true,
                                                                         bool break_on_mode_sw = false);
 
@@ -200,10 +200,10 @@ public:
      *
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    [[nodiscard]] virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb,
-                                                      void* worker_data,
-                                                      int sched_priority = DEFAULT_SCHED_PRIORITY,
-                                                      std::optional<int> cpu_id = std::nullopt) = 0;
+    [[nodiscard]] virtual std::pair<WorkerPoolStatus, apple::AppleThreadingStatus> add_worker(WorkerCallback worker_cb,
+                                                                                              void* worker_data,
+                                                                                              int sched_priority = DEFAULT_SCHED_PRIORITY,
+                                                                                              std::optional<int> cpu_id = std::nullopt) = 0;
 
     /**
      * @brief Wait for all workers to finish and become idle. Will block until all

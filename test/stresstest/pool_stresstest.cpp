@@ -343,7 +343,7 @@ int main(int argc, char **argv)
 
         data.push_back(d);
         auto res = worker_pool->add_worker(worker_function, &data[i]);
-        if (res != twine::WorkerPoolStatus::OK)
+        if (res.first != twine::WorkerPoolStatus::OK)
         {
             std::cout << "Failed to start workers: " << to_error_string(res) << std::endl;
             return -1;
