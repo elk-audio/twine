@@ -89,7 +89,7 @@ public:
         }
         else if constexpr (type == ThreadType::COBALT)
         {
-#ifdef TWINE_BUILD_WITH_COBALT
+#ifdef TWINE_BUILD_WITH_XENOMAI
             _thread_helper = new CobaltThreadHelper();
 
             _semaphores[0] = new PosixSemaphore();
@@ -287,7 +287,7 @@ public:
         }
         else if constexpr (type == ThreadType::COBALT)
         {
-#ifdef TWINE_BUILD_WITH_COBALT
+#ifdef TWINE_BUILD_WITH_XENOMAI
             _thread_helper = new CobaltThreadHelper();
 #else
             assert(false && "Not built with Cobalt support");
