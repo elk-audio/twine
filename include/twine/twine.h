@@ -30,7 +30,6 @@
 
 #define TWINE_APPLE_THREADING
 #include <mach/mach_time.h>
-#include <mach/thread_act.h>
 
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
 #include <os/workgroup.h>

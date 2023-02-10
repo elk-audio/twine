@@ -116,11 +116,6 @@ int os_workgroup_join(os_workgroup_t wg, os_workgroup_join_token_t token_out)
     return AppleAudioHardwareMockup::instance->os_workgroup_join(wg, token_out);
 }
 
-void os_workgroup_leave(os_workgroup_t wg, os_workgroup_join_token_t token_out)
-{
-    AppleAudioHardwareMockup::instance->os_workgroup_leave(wg, token_out);
-}
-
 bool os_workgroup_testcancel(os_workgroup_t wg)
 {
     return AppleAudioHardwareMockup::instance->os_workgroup_testcancel(wg);

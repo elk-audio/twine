@@ -23,6 +23,10 @@
 
 #ifdef TWINE_APPLE_THREADING
 
+#ifndef MOCK_APPLE_THREADING
+#include <mach/thread_act.h>
+#endif
+
 #include <pthread.h>
 #include <vector>
 
@@ -58,7 +62,7 @@ bool set_current_thread_to_realtime(double period_ms)
 
     policy.preemptible = true;
 
-    bool status = thread_policy_set(pthread_mach_thread_np(thread),
+    auto status = thread_policy_set(pthread_mach_thread_np(thread),
                                     THREAD_TIME_CONSTRAINT_POLICY,
                                     reinterpret_cast<thread_policy_t>(&policy),
                                     THREAD_TIME_CONSTRAINT_POLICY_COUNT);
@@ -166,7 +170,7 @@ void leave_workgroup_if_needed(os_workgroup_join_token_s* join_token,
 
 #endif
 
-std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup(os_workgroup_t p_workgroup)
+std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup([[maybe_unused]] os_workgroup_t p_workgroup)
 {
     os_workgroup_join_token_s join_token;
 

@@ -26,8 +26,6 @@ public:
     MOCK_METHOD(bool, os_workgroup_testcancel, (os_workgroup_t wg));
     MOCK_METHOD(int, os_workgroup_join, (os_workgroup_t wg, os_workgroup_join_token_t token_out));
 
-    MOCK_METHOD(void, os_workgroup_leave, (os_workgroup_t wg, os_workgroup_join_token_t token_out));
-
     MOCK_METHOD(mach_port_t, pthread_mach_thread_np, (pthread_t));
 
     static AppleAudioHardwareMockup* instance;
