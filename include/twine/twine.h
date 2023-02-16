@@ -177,7 +177,7 @@ public:
      * @return
      */
     [[nodiscard]] static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
-                                                                        apple::AppleMultiThreadData apple_data,
+                                                                        [[maybe_unused]] apple::AppleMultiThreadData apple_data,
                                                                         bool disable_denormals = true,
                                                                         bool break_on_mode_sw = false);
 
