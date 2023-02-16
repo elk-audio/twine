@@ -19,6 +19,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <functional>
 
 /**
  * This logic switches the use of apple silicon-specific threading priorities and workgroups on/off,
@@ -94,7 +95,8 @@ namespace twine::apple
 
 enum class AppleThreadingStatus
 {
-    OK = 0
+    OK = 0,
+    EMPTY = 19
 };
 
 typedef void* AppleMultiThreadData;

@@ -89,7 +89,7 @@ void init_xenomai()
 }
 
 std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
-                                                           apple::AppleMultiThreadData apple_data,
+                                                           [[maybe_unused]] apple::AppleMultiThreadData apple_data,
                                                            bool disable_denormals,
                                                            bool break_on_mode_sw)
 {

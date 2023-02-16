@@ -357,6 +357,7 @@ private:
 #endif
     }
 
+#if defined(TWINE_APPLE_THREADING)
     void _init_apple_thread()
     {
         assert(_apple_data.chunk_size != 0);
@@ -414,6 +415,7 @@ private:
             }
         }
     }
+#endif
 
     friend class WorkerPoolImpl<ThreadType::PTHREAD>;
     friend class WorkerPoolImpl<ThreadType::XENOMAI>;
