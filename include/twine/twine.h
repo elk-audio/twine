@@ -21,15 +21,7 @@
 #include <string>
 #include <functional>
 
-/**
- * This logic switches the use of apple silicon-specific threading priorities and workgroups on/off,
- *  throughout Twine.
- *  By default it will always be on when building on Apple.
- *  But you may want to temporarily bypass that here, for testing purposes.
- */
-#ifdef __APPLE__
-
-#define TWINE_APPLE_THREADING
+#ifdef TWINE_APPLE_THREADING
 #include <mach/mach_time.h>
 
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
