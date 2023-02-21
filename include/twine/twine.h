@@ -51,12 +51,7 @@ enum class AppleThreadingStatus
     WORKGROUP_ALREADY_CANCELLED = 13,
     WORKGROUP_JOINING_UNKNOWN_FAILURE = 14,
 
-    QOS_EAGAIN = 15,
-    QOS_EPERM = 16,
-    QOS_EINVAL = 17,
-    QOS_UNKNOWN = 18,
-
-    EMPTY = 19
+    EMPTY = 15
 };
 
 typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;

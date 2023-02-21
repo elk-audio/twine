@@ -252,14 +252,6 @@ std::string status_to_string(AppleThreadingStatus status)
             return "Attempting to join thread workgroup that is already canceled";
         case AppleThreadingStatus::WORKGROUP_JOINING_UNKNOWN_FAILURE:
             return "Unknown error when joining workgroup";
-        case AppleThreadingStatus::QOS_EAGAIN:
-            return "EAGAIN: Resource temporarily unavailable";
-        case AppleThreadingStatus::QOS_EPERM:
-            return "EPERM: Operation not permitted";
-        case AppleThreadingStatus::QOS_EINVAL:
-            return "EINVAL: Invalid argument";
-        case AppleThreadingStatus::QOS_UNKNOWN:
-            return "Unknown error setting Apple thread QoS Class";
         default:
             return "";
     }

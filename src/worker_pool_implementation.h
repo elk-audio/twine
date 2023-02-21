@@ -381,39 +381,6 @@ private:
                 _status = status;
             }
         }
-        else if (__builtin_available(macOS 10.10, *))
-        {
-            // IF this is used on macOS that is not 11: try to set QoS.
-            int error = pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-            switch (error)
-            {
-                case 0: // Successful
-                {
-                    // No need to set to OK - it's the default value.
-                    break;
-                }
-                case EAGAIN:
-                {
-                    _status = apple::AppleThreadingStatus::QOS_EAGAIN;
-                    break;
-                }
-                case EPERM:
-                {
-                    _status = apple::AppleThreadingStatus::QOS_EPERM;
-                    break;
-                }
-                case EINVAL:
-                {
-                    _status = apple::AppleThreadingStatus::QOS_EINVAL;
-                    break;
-                }
-                default:
-                {
-                    _status = apple::AppleThreadingStatus::QOS_UNKNOWN;
-                    break;
-                }
-            }
-        }
     }
 #endif
 
