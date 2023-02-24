@@ -253,19 +253,28 @@ public:
 
     {
 #if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
-        // The workgroup will be the same for all threads, so it only needs to be fetched once.
-        auto device_workgroup_result = twine::apple::get_device_workgroup(_apple_data.device_name);
 
-        if (device_workgroup_result.second != twine::apple::AppleThreadingStatus::OK)
+        if (__builtin_available(macOS 11.00, *))
         {
-            _status = device_workgroup_result.second;
+            // The workgroup will be the same for all threads, so it only needs to be fetched once.
+            auto device_workgroup_result = twine::apple::get_device_workgroup(_apple_data.device_name);
+
+            if (device_workgroup_result.second != twine::apple::AppleThreadingStatus::OK)
+            {
+                _status = device_workgroup_result.second;
+            }
+            else
+            {
+                _status = apple::AppleThreadingStatus::OK;
+            }
+
+            _p_workgroup = device_workgroup_result.first;
         }
         else
         {
             _status = apple::AppleThreadingStatus::OK;
+            _p_workgroup = nullptr;
         }
-
-        _p_workgroup = device_workgroup_result.first;
 #endif
     }
 

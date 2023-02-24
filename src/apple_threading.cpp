@@ -74,89 +74,91 @@ bool set_current_thread_to_realtime(double period_ms)
 
 std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::string& device_name)
 {
-    if (__builtin_available(macOS 11.00, *)) {} // Weirdly, comparing the __builtin_available call to bool generates a warning.
-    else
+    // Weirdly, comparing the __builtin_available call to bool generates a warning.
+    if (__builtin_available(macOS 11.00, *))
     {
-        return {nullptr, AppleThreadingStatus::MACOS_11_NOT_DETECTED};
-    }
+        AudioObjectPropertyAddress property_address;
+        property_address.mSelector = kAudioHardwarePropertyDevices;
+        property_address.mScope = kAudioObjectPropertyScopeWildcard;
+        property_address.mElement = kAudioObjectPropertyElementMain;
 
-    AudioObjectPropertyAddress property_address;
-    property_address.mSelector = kAudioHardwarePropertyDevices;
-    property_address.mScope = kAudioObjectPropertyScopeWildcard;
-    property_address.mElement = kAudioObjectPropertyElementMain;
+        UInt32 size = 0;
+        OSStatus apple_oss_status = -1;
 
-    UInt32 size;
-    OSStatus apple_oss_status;
-
-    apple_oss_status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &property_address, 0, nullptr, &size);
-    if (apple_oss_status != noErr)
-    {
-        return {nullptr, AppleThreadingStatus::PD_SIZE_FAILED};
-    }
-
-    // Calculating the number of audio devices.
-    auto device_count = static_cast<int>(size) / static_cast<int>(sizeof(AudioDeviceID));
-
-    auto devices = std::vector<AudioDeviceID>();
-    devices.resize(device_count);
-
-    apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.data());
-    if (apple_oss_status != noErr)
-    {
-        return {nullptr, AppleThreadingStatus::PD_FAILED};
-    }
-
-    for (int i = 0; i < device_count; ++i)
-    {
-        property_address.mSelector = kAudioDevicePropertyDeviceName;
-
-        apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
+        apple_oss_status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &property_address, 0, nullptr, &size);
         if (apple_oss_status != noErr)
         {
-            return {nullptr, AppleThreadingStatus::FETCH_NAME_SIZE_FAILED};
+            return {nullptr, AppleThreadingStatus::PD_SIZE_FAILED};
         }
 
-        std::string name_string;
-        name_string.resize(size);
+        // Calculating the number of audio devices.
+        auto device_count = static_cast<int>(size) / static_cast<int>(sizeof(AudioDeviceID));
 
-        apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, name_string.data());
+        auto devices = std::vector<AudioDeviceID>();
+        devices.resize(device_count);
 
-        name_string.resize(size - 1);
-
+        apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.data());
         if (apple_oss_status != noErr)
         {
-            return {nullptr, AppleThreadingStatus::FETCH_NAME_FAILED};
+            return {nullptr, AppleThreadingStatus::PD_FAILED};
         }
 
-        if (name_string == device_name)
+        for (int i = 0; i < device_count; ++i)
         {
-            property_address.mSelector = kAudioDevicePropertyIOThreadOSWorkgroup;
+            property_address.mSelector = kAudioDevicePropertyDeviceName;
 
             apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
             if (apple_oss_status != noErr)
             {
-                return {nullptr, AppleThreadingStatus::WG_SIZE_FAILED};
+                return {nullptr, AppleThreadingStatus::FETCH_NAME_SIZE_FAILED};
             }
 
-            os_workgroup_t _Nonnull workgroup;
+            std::string name_string;
+            name_string.resize(size);
 
-            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &workgroup);
+            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, name_string.data());
+
+            name_string.resize(size - 1);
+
             if (apple_oss_status != noErr)
             {
-                return {nullptr, AppleThreadingStatus::WG_FAILED};
+                return {nullptr, AppleThreadingStatus::FETCH_NAME_FAILED};
             }
 
-            if (os_workgroup_testcancel(workgroup))
+            if (name_string == device_name)
             {
-                return {workgroup, AppleThreadingStatus::WG_CANCELLED};
+                property_address.mSelector = kAudioDevicePropertyIOThreadOSWorkgroup;
+
+                apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
+                if (apple_oss_status != noErr)
+                {
+                    return {nullptr, AppleThreadingStatus::WG_SIZE_FAILED};
+                }
+
+                os_workgroup_t _Nonnull workgroup;
+
+                apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &workgroup);
+                if (apple_oss_status != noErr)
+                {
+                    return {nullptr, AppleThreadingStatus::WG_FAILED};
+                }
+
+                if (os_workgroup_testcancel(workgroup))
+                {
+                    return {workgroup, AppleThreadingStatus::WG_CANCELLED};
+                }
+
+                // This is the only DESIRABLE outcome.
+                return {workgroup, AppleThreadingStatus::OK};
             }
-
-            // This is the only DESIRABLE outcome.
-            return {workgroup, AppleThreadingStatus::OK};
         }
-    }
 
-    return {nullptr, AppleThreadingStatus::INVALID_DEVICE_NAME_PASSED};
+        return {nullptr, AppleThreadingStatus::INVALID_DEVICE_NAME_PASSED};
+    }
+    else
+    {
+        return {nullptr, AppleThreadingStatus::MACOS_11_NOT_DETECTED};
+    }
 }
 
 void leave_workgroup_if_needed(os_workgroup_join_token_s* join_token,
@@ -164,7 +166,10 @@ void leave_workgroup_if_needed(os_workgroup_join_token_s* join_token,
 {
     if (p_workgroup != nullptr)
     {
-        os_workgroup_leave(p_workgroup, join_token);
+        if (__builtin_available(macOS 11.00, *))
+        {
+            os_workgroup_leave(p_workgroup, join_token);
+        }
     }
 }
 
@@ -181,43 +186,48 @@ std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup([[mayb
     }
     else
     {
-        bool workgroup_cancelled = os_workgroup_testcancel(p_workgroup);
-
-        if (!workgroup_cancelled)
+        if (__builtin_available(macOS 11.00, *))
         {
-            int result = os_workgroup_join(p_workgroup, &join_token);
+            bool workgroup_cancelled = os_workgroup_testcancel(p_workgroup);
 
-            switch (result)
+            if (!workgroup_cancelled)
             {
-                case 0:
+                int result = os_workgroup_join(p_workgroup, &join_token);
+
+                switch (result)
                 {
-                    return {AppleThreadingStatus::OK, join_token};
-                }
-                case EINVAL:
-                {
-                    return {AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED, join_token};
-                }
-                case EALREADY:
-                {
-                    // Attempting to join thread workgroup which thread is already member of.
-                    // This isn't a problem which requires action. But good to assert for debugging.
-                    assert(false);
-                    return {AppleThreadingStatus::OK, join_token};
-                }
-                default:
-                {
-                    return {AppleThreadingStatus::WORKGROUP_JOINING_UNKNOWN_FAILURE, join_token};
+                    case 0:
+                    {
+                        return {AppleThreadingStatus::OK, join_token};
+                    }
+                    case EINVAL:
+                    {
+                        return {AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED, join_token};
+                    }
+                    case EALREADY:
+                    {
+                        // Attempting to join thread workgroup which thread is already member of.
+                        // This isn't a problem which requires action. But good to assert for debugging.
+                        assert(false);
+                        return {AppleThreadingStatus::OK, join_token};
+                    }
+                    default:
+                    {
+                        return {AppleThreadingStatus::WORKGROUP_JOINING_UNKNOWN_FAILURE, join_token};
+                    }
                 }
             }
-        }
-        else
-        {
-            return {AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED, join_token};
+            else
+            {
+                return {AppleThreadingStatus::WORKGROUP_ALREADY_CANCELLED, join_token};
+            }
         }
     }
 #else
     return {AppleThreadingStatus::OK, join_token};
 #endif
+
+    return {AppleThreadingStatus::EMPTY, join_token};
 }
 
 std::string status_to_string(AppleThreadingStatus status)

@@ -157,12 +157,14 @@ TEST_F(PthreadWorkerPoolTest, TestSetPriority)
 
 TEST_F(PthreadWorkerPoolTest, TestWrongPriority)
 {
-    EXPECT_CALL(_mock, AudioObjectHasProperty).WillRepeatedly(Return(true));
-    EXPECT_CALL(_mock, AudioObjectGetPropertyDataSize).WillRepeatedly(Return(noErr));
-    EXPECT_CALL(_mock, AudioObjectGetPropertyData).WillRepeatedly(Return(noErr));
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+    MockLambdas mock_lambdas(_test_data);
+    workgroup_repeated_success_expectations(_mock, mock_lambdas);
+#endif
 
     auto res = _module_under_test.add_worker(worker_function, nullptr, -17);
     ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res.first);
+
     res = _module_under_test.add_worker(worker_function, nullptr, 102);
     ASSERT_EQ(WorkerPoolStatus::INVALID_ARGUMENTS, res.first);
 }
@@ -430,11 +432,11 @@ TEST_F(AppleThreadingTest, TestThreadWorkgroupJoinFailure)
 
 TEST_F(AppleThreadingTest, FunctionalityFailureTest)
 {
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     MockLambdas mock_lambdas(_test_data);
+    workgroup_failure_expectations(_mock, mock_lambdas);
+#endif
 
-    workgroup_success_expectations(_mock, mock_lambdas);
-
-    EXPECT_CALL(_mock, os_workgroup_join).WillOnce(Return(1)); // 1 for failure - so that we can leave.
     EXPECT_CALL(_mock, pthread_mach_thread_np).WillRepeatedly(Return(true));
 
     WorkerPoolImpl<ThreadType::PTHREAD> worker_pool {N_TEST_WORKERS,
@@ -447,7 +449,7 @@ TEST_F(AppleThreadingTest, FunctionalityFailureTest)
     auto res = worker_pool.add_worker(worker_function, &a);
 
     EXPECT_EQ(res.first, WorkerPoolStatus::ERROR);
-    EXPECT_EQ(res.second, apple::AppleThreadingStatus::WORKGROUP_JOINING_UNKNOWN_FAILURE);
+    EXPECT_EQ(res.second, apple::AppleThreadingStatus::NO_WORKGROUP_PASSED);
 }
 
 

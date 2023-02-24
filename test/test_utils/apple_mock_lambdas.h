@@ -243,6 +243,22 @@ void workgroup_repeated_success_expectations(testing::StrictMock<AppleAudioHardw
 
     EXPECT_CALL(mock, os_workgroup_testcancel).WillRepeatedly(Return(false));
 }
+
+void workgroup_failure_expectations(testing::StrictMock<AppleAudioHardwareMockup>& mock, MockLambdas& mock_lambdas)
+{
+    EXPECT_CALL(mock, AudioObjectGetPropertyDataSize)
+            .WillOnce(mock_lambdas.mock_size_of_one_device) // Getting the size of devices - pretending there's one device:
+            .WillOnce(mock_lambdas.mock_size_of_name) // Getting the size of the name:
+            .WillOnce(mock_lambdas.mock_size_of_workgroup); // Getting the size of workgroup:
+
+    EXPECT_CALL(mock, AudioObjectGetPropertyData)
+            .WillOnce(mock_lambdas.mock_devices_data_structure) // Getting the devices data structure
+            .WillOnce(mock_lambdas.mock_device_name) // Getting the device name
+            .WillOnce(mock_lambdas.mock_workgroup_failure); // Getting the workgroup
+
+    EXPECT_CALL(mock, os_workgroup_testcancel).WillRepeatedly(Return(false));
+}
+
 #else
 struct AppleTestData
 {
