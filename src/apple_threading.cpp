@@ -94,8 +94,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
         // Calculating the number of audio devices.
         auto device_count = static_cast<int>(size) / static_cast<int>(sizeof(AudioDeviceID));
 
-        auto devices = std::vector<AudioDeviceID>();
-        devices.resize(device_count);
+        auto devices = std::vector<AudioDeviceID>(device_count);
 
         apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.data());
         if (apple_oss_status != noErr)
@@ -180,13 +179,13 @@ std::pair<AppleThreadingStatus, os_workgroup_join_token_s> join_workgroup([[mayb
     os_workgroup_join_token_s join_token;
 
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
-    if (p_workgroup == nullptr)
+    if (__builtin_available(macOS 11.00, *))
     {
-        return {AppleThreadingStatus::NO_WORKGROUP_PASSED, join_token};
-    }
-    else
-    {
-        if (__builtin_available(macOS 11.00, *))
+        if (p_workgroup == nullptr)
+        {
+            return {AppleThreadingStatus::NO_WORKGROUP_PASSED, join_token};
+        }
+        else
         {
             bool workgroup_cancelled = os_workgroup_testcancel(p_workgroup);
 
