@@ -117,6 +117,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
 
             apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, name_string.data());
 
+            // name_string comes with a termination character, which is removed, or the comparison with device_name will fail.
             name_string.resize(size - 1);
 
             if (apple_oss_status != noErr)

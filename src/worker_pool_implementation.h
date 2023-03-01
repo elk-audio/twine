@@ -480,10 +480,10 @@ public:
         }
 
         auto worker = std::make_unique<WorkerThread<type>>(_barrier,
-                                                            worker_cb,
-                                                            worker_data,
-                                                            _apple_data,
-                                                            _running,
+                                                           worker_cb,
+                                                           worker_data,
+                                                           _apple_data,
+                                                           _running,
                                                            _disable_denormals,
                                                            _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
