@@ -262,7 +262,7 @@ void workgroup_failure_expectations(testing::StrictMock<AppleAudioHardwareMockup
 #else
 struct AppleTestData
 {
-    twine::apple::AppleMultiThreadData apple_data {"AudioDeviceName", 64, 48000};
+    twine::apple::AppleMultiThreadData apple_data;
 };
 #endif
 

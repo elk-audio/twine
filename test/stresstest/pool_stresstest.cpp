@@ -43,7 +43,7 @@ const float co_b0 = (1.0f - w0_cos) / 2.0f * norm;;
 const float co_b1 = (1 - w0_cos) * norm;
 const float co_b2 = co_b0;
 
-using AudioBuffer = std::array<float, 128>;
+using Buffer = std::array<float, 128>;
 using FilterRegister = std::array<float, 2>;
 using TimeStamp = std::chrono::nanoseconds;
 
@@ -77,7 +77,7 @@ void update_stats(TimeStats& data, TimeStamp new_time)
 
 struct ProcessData
 {
-    AudioBuffer buffer;
+    Buffer buffer;
     FilterRegister mem;
     TimeStamp start_time{0};
     TimeStamp end_time{0};
@@ -133,7 +133,7 @@ void xenomai_thread_init()
 #endif
 
 
-std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
+std::tuple<int, int, int, bool, bool, int, double, std::string> parse_opts(int argc, char** argv)
 {
     int workers = DEFAULT_WORKERS;
     int cores = DEFAULT_CORES;
@@ -142,7 +142,11 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
     bool print_timings = false;
     signed char c;
 
-    while ((c = getopt(argc, argv, "w:c:i:xt")) != -1)
+    int chunk_size = 64;
+    double sample_rate = 48000;
+    std::string device_name = "AggregateAudio";
+
+    while ((c = getopt(argc, argv, "w:c:i:xt:b:s:d:")) != -1)
     {
         switch (c)
         {
@@ -165,6 +169,15 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
                     xenomai = true;
                 }
                 break;
+            case 'b':
+                chunk_size = atoi(optarg);
+                break;
+            case 's':
+                sample_rate = static_cast<double>(atoi(optarg));
+                break;
+            case 'd':
+                device_name = optarg;
+                break;
             case '?':
                 std::cout << "Options are: -w[n of worker threads], -c[n of cores], -i[n of iterations], -x - use xenomai threads, -t - print timings for each iteration" << std::endl;
                 abort();
@@ -174,7 +187,8 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
         }
     }
     return std::make_tuple(workers, cores, iters, xenomai,
-                           print_timings);
+                           print_timings,
+                           chunk_size, sample_rate, device_name);
 }
 
 
@@ -321,11 +335,19 @@ void run_stress_test_in_xenomai_thread([[maybe_unused]] void* data)
 
 int main(int argc, char **argv)
 {
-    auto [workers, cores, iters, xenomai, timings] = parse_opts(argc, argv);
+    auto [workers, cores, iters, xenomai, timings, chunk_size, sample_rate, device_name] = parse_opts(argc, argv);
 
     std::vector<ProcessData> data;
     data.reserve(workers);
-    auto worker_pool = twine::WorkerPool::create_worker_pool(cores);
+
+    twine::apple::AppleMultiThreadData apple_data;
+#ifdef TWINE_APPLE_THREADING
+    apple_data.chunk_size = chunk_size;
+    apple_data.current_sample_rate = sample_rate;
+    apple_data.device_name = device_name;
+#endif
+
+    auto worker_pool = twine::WorkerPool::create_worker_pool(cores, apple_data);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -345,7 +367,7 @@ int main(int argc, char **argv)
         auto res = worker_pool->add_worker(worker_function, &data[i]);
         if (res.first != twine::WorkerPoolStatus::OK)
         {
-            std::cout << "Failed to start workers: " << to_error_string(res) << std::endl;
+            std::cout << "Failed to start workers: " << to_error_string(res.first) << std::endl;
             return -1;
         }
     }
