@@ -168,6 +168,8 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
                 return {nullptr, AppleThreadingStatus::FETCH_NAME_FAILED};
             }
 
+            // Note: getting the device name should produce exactly the same result as in the CoreAudio frontend,
+            // otherwise a mismatch might occur which will prevent us from selecting the correct workgroup.
             auto name_string = cf_string_to_std_string(cf_string_ref);
 
             CFRelease(cf_string_ref);
