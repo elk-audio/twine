@@ -44,7 +44,7 @@ if (${TWINE_WITH_APPLE_COREAUDIO})
     message("Building with Apple CoreAudio support.")
     # Compile definitions
     set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DTWINE_BUILD_WITH_APPLE_COREAUDIO)
-    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} "-framework CoreAudio")
+    set(EXTRA_BUILD_LIBRARIES ${EXTRA_BUILD_LIBRARIES} "-framework CoreAudio -framework Foundation")
 endif()
 
 #######################

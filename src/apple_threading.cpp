@@ -72,6 +72,51 @@ bool set_current_thread_to_realtime(double period_ms)
 
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
 
+// Borrowed from sushi/src/audio_frontends/apple_coreaudio/apple_coreaudio_device.mm
+std::string cf_string_to_std_string(const CFStringRef& cf_string_ref)
+{
+    if (cf_string_ref == nullptr)
+    {
+        return {};
+    }
+
+    // First try the cheap solution (no allocation). Not guaranteed to return anything.
+    // Note: for this particular case there is not really a benefit of using this function,
+    // because we're going to allocate a new string anyway, however in this case I prefer
+    // to use the 'best practice' here to educate myself properly in the future.
+    const auto* c_string = CFStringGetCStringPtr(cf_string_ref, kCFStringEncodingUTF8);
+
+    if (c_string != nullptr)
+    {
+        return c_string;
+    }
+
+    // If the above didn't return anything we have to fall back and use CFStringGetCString.
+    CFIndex length = CFStringGetLength(cf_string_ref);
+    CFIndex max_size = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1; // Include room for \0 termination
+
+    std::string output(max_size, 0);
+    if (!CFStringGetCString(cf_string_ref, output.data(), max_size, kCFStringEncodingUTF8))
+    {
+        return {};
+    }
+
+    // Trim zeroes at the end
+    for (auto it = output.end();;)
+    {
+        if (it == output.begin())
+            return {};
+
+        --it;
+
+        if (*it != 0)
+        {
+            output.erase(it + 1, output.end());
+            return output;
+        }
+    }
+}
+
 std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::string& device_name)
 {
     // Weirdly, comparing the __builtin_available call to bool generates a warning.
@@ -79,7 +124,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
     {
         AudioObjectPropertyAddress property_address;
         property_address.mSelector = kAudioHardwarePropertyDevices;
-        property_address.mScope = kAudioObjectPropertyScopeWildcard;
+        property_address.mScope = kAudioObjectPropertyScopeGlobal;
         property_address.mElement = kAudioObjectPropertyElementMain;
 
         UInt32 size = 0;
@@ -108,9 +153,10 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
             return {nullptr, AppleThreadingStatus::PD_SIZE_FAILED};
         }
 
+        // Iterate all device ids until we find a device with a matching name
         for (size_t i = 0; i < device_count; ++i)
         {
-            property_address.mSelector = kAudioDevicePropertyDeviceName;
+            property_address.mSelector = kAudioObjectPropertyName;
 
             apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
             if (apple_oss_status != noErr)
@@ -118,18 +164,22 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
                 return {nullptr, AppleThreadingStatus::FETCH_NAME_SIZE_FAILED};
             }
 
-            std::string name_string;
-            name_string.resize(size);
+            if (size != sizeof(CFStringRef))
+            {
+                return {nullptr, AppleThreadingStatus::FETCH_NAME_SIZE_FAILED};
+            }
 
-            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, name_string.data());
+            CFStringRef cf_string_ref{nullptr};
+            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &cf_string_ref);
 
-            // name_string comes with a termination character, which is removed, or the comparison with device_name will fail.
-            name_string.resize(size - 1);
-
-            if (apple_oss_status != noErr)
+            if (apple_oss_status != noErr || cf_string_ref == nullptr)
             {
                 return {nullptr, AppleThreadingStatus::FETCH_NAME_FAILED};
             }
+
+            auto name_string = cf_string_to_std_string(cf_string_ref);
+
+            CFRelease(cf_string_ref);
 
             if (name_string == device_name)
             {
@@ -154,7 +204,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
                     return {workgroup, AppleThreadingStatus::WG_CANCELLED};
                 }
 
-                // This is the only DESIRABLE outcome.
+                // This is the only desirable outcome.
                 return {workgroup, AppleThreadingStatus::OK};
             }
         }
@@ -273,7 +323,6 @@ std::string status_to_string(AppleThreadingStatus status)
     }
 }
 
-} // twine::apple namespace
+} // namespace twine::apple
 
 #endif // TWINE_APPLE_THREADING
-
