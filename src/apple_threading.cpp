@@ -91,8 +91,8 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
             return {nullptr, AppleThreadingStatus::PD_SIZE_FAILED};
         }
 
-        // Calculating the number of audio devices.
-        auto device_count = static_cast<int>(size) / static_cast<int>(sizeof(AudioDeviceID));
+        // Calculate the number of audio device ids.
+        auto device_count = size / sizeof(AudioDeviceID);
 
         auto devices = std::vector<AudioDeviceID>(device_count);
 
@@ -102,7 +102,13 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
             return {nullptr, AppleThreadingStatus::PD_FAILED};
         }
 
-        for (int i = 0; i < device_count; ++i)
+        // Verify the amount of returned audio devices, just to be sure
+        if (size / sizeof(AudioObjectID) != device_count)
+        {
+            return {nullptr, AppleThreadingStatus::PD_SIZE_FAILED};
+        }
+
+        for (size_t i = 0; i < device_count; ++i)
         {
             property_address.mSelector = kAudioDevicePropertyDeviceName;
 
