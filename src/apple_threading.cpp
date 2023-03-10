@@ -139,9 +139,9 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
         // Calculate the number of audio device ids.
         auto device_count = size / sizeof(AudioObjectID);
 
-        auto devices = std::vector<AudioObjectID>(device_count);
+        auto device_ids = std::vector<AudioObjectID>(device_count);
 
-        apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.data());
+        apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, device_ids.data());
         if (apple_oss_status != noErr)
         {
             return {nullptr, AppleThreadingStatus::PD_FAILED};
@@ -154,11 +154,11 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
         }
 
         // Iterate all device ids until we find a device with a matching name
-        for (size_t i = 0; i < device_count; ++i)
+        for (auto& device_id : device_ids)
         {
             property_address.mSelector = kAudioObjectPropertyName;
 
-            apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
+            apple_oss_status = AudioObjectGetPropertyDataSize(device_id, &property_address, 0, nullptr, &size);
             if (apple_oss_status != noErr)
             {
                 return {nullptr, AppleThreadingStatus::FETCH_NAME_SIZE_FAILED};
@@ -170,7 +170,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
             }
 
             CFStringRef cf_string_ref{nullptr};
-            apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &cf_string_ref);
+            apple_oss_status = AudioObjectGetPropertyData(device_id, &property_address, 0, nullptr, &size, &cf_string_ref);
 
             if (apple_oss_status != noErr || cf_string_ref == nullptr)
             {
@@ -185,7 +185,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
             {
                 property_address.mSelector = kAudioDevicePropertyIOThreadOSWorkgroup;
 
-                apple_oss_status = AudioObjectGetPropertyDataSize(devices[i], &property_address, 0, nullptr, &size);
+                apple_oss_status = AudioObjectGetPropertyDataSize(device_id, &property_address, 0, nullptr, &size);
                 if (apple_oss_status != noErr)
                 {
                     return {nullptr, AppleThreadingStatus::WG_SIZE_FAILED};
@@ -193,7 +193,7 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
 
                 os_workgroup_t _Nonnull workgroup;
 
-                apple_oss_status = AudioObjectGetPropertyData(devices[i], &property_address, 0, nullptr, &size, &workgroup);
+                apple_oss_status = AudioObjectGetPropertyData(device_id, &property_address, 0, nullptr, &size, &workgroup);
                 if (apple_oss_status != noErr)
                 {
                     return {nullptr, AppleThreadingStatus::WG_FAILED};
