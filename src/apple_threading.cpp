@@ -92,9 +92,9 @@ std::pair<os_workgroup_t, AppleThreadingStatus> get_device_workgroup(const std::
         }
 
         // Calculate the number of audio device ids.
-        auto device_count = size / sizeof(AudioDeviceID);
+        auto device_count = size / sizeof(AudioObjectID);
 
-        auto devices = std::vector<AudioDeviceID>(device_count);
+        auto devices = std::vector<AudioObjectID>(device_count);
 
         apple_oss_status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &property_address, 0, nullptr, &size, devices.data());
         if (apple_oss_status != noErr)
