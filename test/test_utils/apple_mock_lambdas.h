@@ -84,7 +84,7 @@ struct MockLambdas
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             *out_data_size = 4;
@@ -97,11 +97,11 @@ struct MockLambdas
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            *out_data_size = sizeof(test_data.device_name);
+            *out_data_size = sizeof(CFStringRef);
 
             return kAudioHardwareNoError;
         };
@@ -111,7 +111,7 @@ struct MockLambdas
             // The mocked test doesn't create a workgroup instance to compare against here.
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             *out_data_size = static_cast<int>(sizeof(test_data.workgroup));
@@ -140,7 +140,7 @@ struct MockLambdas
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             EXPECT_EQ(sizeof(out_data), sizeof(test_data.device_ids));
@@ -153,13 +153,23 @@ struct MockLambdas
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            strcpy((char*)out_data, test_data.device_name);
+            auto size_of_ref = sizeof(CFStringRef);
 
-            *size = sizeof(test_data.device_name);
+            // This method mocks an apple-API method, that allocates memory,
+            // which the invoker then has to release with CFRelease.
+            // We do that in the production code e.g. get_device_workgroup,
+            // meaning, if the test leaks memory, that is an issue with the production code - not this test.
+            auto cfStr = CFStringCreateWithCString(kCFAllocatorDefault,
+                                                   test_data.device_name,
+                                                   kCFStringEncodingUTF8);
+
+            memcpy(out_data, &cfStr, size_of_ref);
+
+            *size = size_of_ref;
 
             return noErr;
         };
@@ -170,7 +180,7 @@ struct MockLambdas
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             EXPECT_EQ(sizeof(out_data), sizeof(test_data.workgroup));
@@ -187,15 +197,28 @@ struct MockLambdas
 
         mock_name_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void*)
         {
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
             return 10;
         };
 
         mock_name_mismatch_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data)
         {
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            strcpy((char*)out_data, test_data.device_name);
-            *size = sizeof(test_data.device_name);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+
+            auto size_of_ref = sizeof(CFStringRef);
+
+            // This method mocks an apple-API method, that allocates memory,
+            // which the invoker then has to release with CFRelease.
+            // We do that in the production code e.g. get_device_workgroup,
+            // meaning, if the test leaks memory, that is an issue with the production code - not this test.
+            auto cfStr = CFStringCreateWithCString(kCFAllocatorDefault,
+                                                   test_data.device_name,
+                                                   kCFStringEncodingUTF8);
+
+            memcpy(out_data, &cfStr, size_of_ref);
+
+            *size = size_of_ref;
+
             return noErr;
         };
 
