@@ -2,20 +2,21 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-completeness"// Ignore Apple nonsense
 
-#include "../test_utils/apple_mock_lambdas.h"
-
-#include "apple_threading.cpp"
-
-#include "worker_pool_implementation.h"
-
 #pragma clang diagnostic pop
 
 #include <thread>
 #include <functional>
 
-#include "gtest/gtest.h"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #define private public
+
+#include "../test_utils/apple_mock_lambdas.h"
+
+#include "apple_threading.cpp"
+
+#include "worker_pool_implementation.h"
 
 using ::testing::NiceMock;
 using ::testing::Return;
@@ -94,7 +95,9 @@ protected:
     bool a {false};
     bool b {false};
 
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     testing::StrictMock<AppleAudioHardwareMockup> _mock;
+#endif
 };
 
 void worker_function(void* data)
@@ -108,10 +111,10 @@ TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     MockLambdas mock_lambdas(_test_data);
     workgroup_repeated_success_expectations(_mock, mock_lambdas);
-#endif
 
     EXPECT_CALL(_mock, os_workgroup_join).WillRepeatedly(Return(0)); // 0 for success
     EXPECT_CALL(_mock, pthread_mach_thread_np).WillRepeatedly(Return(true));
+#endif
 
     auto res = _module_under_test.add_worker(worker_function, &a);
 
