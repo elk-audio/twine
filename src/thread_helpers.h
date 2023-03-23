@@ -22,232 +22,244 @@
 
 #include <cassert>
 
+#include <cstdint>
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
 
-#ifdef TWINE_BUILD_WITH_XENOMAI
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <cobalt/pthread.h>
-#include <cobalt/semaphore.h>
-#pragma GCC diagnostic pop
-#endif
-#ifndef TWINE_BUILD_WITH_XENOMAI
-#include "xenomai_stubs.h"
+#ifdef TWINE_BUILD_WITH_EVL
+    #include <evl/evl.h>
+    #include <evl/clock.h>
+    #include <evl/mutex.h>
 #endif
 
-#include "twine/twine.h"
 
 namespace twine {
 
 enum class ThreadType : uint32_t
 {
     PTHREAD,
-    XENOMAI
+    COBALT,
+    EVL
 };
 
-template<ThreadType type>
-inline int mutex_create(pthread_mutex_t* mutex, const pthread_mutexattr_t* attributes)
+
+// Empty base classes for the generic arguments of ThreadHelper
+
+struct BaseMutex
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_mutex_init(mutex, attributes);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_mutex_init(mutex, attributes);
-    }
+    virtual ~BaseMutex() = 0;
+};
+
+struct BaseCondVar
+{
+    virtual ~BaseCondVar() = 0;
+};
+
+struct BaseSemaphore
+{
+    virtual ~BaseSemaphore() = 0;
+};
+
+
+/**
+ * @brief Stateless pure virtual interface for wrapping thread functions
+ *        implemented by the different libraries (POSIX, cobalt, EVL)
+ */
+class BaseThreadHelper
+{
+public:
+    virtual ~BaseThreadHelper();
+
+    virtual int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) = 0;
+
+    virtual int mutex_destroy(BaseMutex* mutex) = 0;
+
+    virtual int mutex_lock(BaseMutex* mutex) = 0;
+
+    virtual int mutex_unlock(BaseMutex* mutex) = 0;
+
+    virtual int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) = 0;
+
+    virtual int condition_var_destroy(BaseCondVar* condition_var) = 0;
+
+    virtual int condition_wait(BaseCondVar* condition_var, BaseMutex* mutex) = 0;
+
+    virtual int condition_signal(BaseCondVar* condition_var) = 0;
+
+    virtual int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) = 0;
+
+    virtual int thread_join(pthread_t thread, void** return_var) = 0;
+
+    virtual int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) = 0;
+
+    virtual int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) = 0;
+
+    virtual int semaphore_wait(BaseSemaphore* semaphore) = 0;
+
+    virtual int semaphore_signal(BaseSemaphore* semaphore) = 0;
+};
+
+
+class PosixThreadHelper : public BaseThreadHelper
+{
+public:
+    PosixThreadHelper() = default;
+    virtual ~PosixThreadHelper() override {};
+
+
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
+
+    int mutex_destroy(BaseMutex* mutex) override;
+
+    int mutex_lock(BaseMutex* mutex) override;
+
+    int mutex_unlock(BaseMutex* mutex) override;
+
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
+
+    int condition_var_destroy(BaseCondVar* condition_var) override;
+
+    int condition_wait(BaseCondVar* condition_var, BaseMutex* mutex) override;
+
+    int condition_signal(BaseCondVar* condition_var) override;
+
+    int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
+
+    int thread_join(pthread_t thread, void** return_var) override;
+
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_wait(BaseSemaphore* semaphore) override;
+
+    int semaphore_signal(BaseSemaphore* semaphore) override;
+};
+
+// These are shared between POSIX and Cobalt,
+// and cause no issues for any build configuration, so it's fine to declare them here
+
+struct PosixMutex : BaseMutex
+{
+    pthread_mutex_t mutex;
+};
+
+struct PosixCondVar : BaseCondVar
+{
+    pthread_cond_t cond_var;
+};
+
+struct PosixSemaphore : BaseSemaphore
+{
+    sem_t semaphore;
+};
+
+inline pthread_mutex_t* to_posix_mutex(BaseMutex* mutex)
+{
+    return &static_cast<PosixMutex*>(mutex)->mutex;
 }
 
-template<ThreadType type>
-inline int mutex_destroy(pthread_mutex_t* mutex)
+inline pthread_cond_t* to_posix_cond(BaseCondVar* cond_var)
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_mutex_destroy(mutex);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_mutex_destroy(mutex);
-    }
+    return &static_cast<PosixCondVar*>(cond_var)->cond_var;
 }
 
-template<ThreadType type>
-inline int mutex_lock(pthread_mutex_t* mutex)
+inline sem_t* to_posix_sem(BaseSemaphore* semaphore)
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_mutex_lock(mutex);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_mutex_lock(mutex);
-    }
+    return &static_cast<PosixSemaphore*>(semaphore)->semaphore;
 }
 
-template<ThreadType type>
-inline int mutex_unlock(pthread_mutex_t* mutex)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_mutex_unlock(mutex);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_mutex_unlock(mutex);
-    }
-}
 
-template<ThreadType type>
-inline int condition_var_create(pthread_cond_t* condition_var, const pthread_condattr_t* attributes)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_cond_init(condition_var, attributes);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_cond_init(condition_var, attributes);
-    }
-}
+#ifdef TWINE_BUILD_WITH_XENOMAI
 
-template<ThreadType type>
-inline int condition_var_destroy(pthread_cond_t* condition_var)
+class CobaltThreadHelper : public BaseThreadHelper
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_cond_destroy(condition_var);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_cond_destroy(condition_var);
-    }
-}
+public:
+    CobaltThreadHelper() = default;
+    virtual ~CobaltThreadHelper() override {};
 
-template<ThreadType type>
-inline int condition_wait(pthread_cond_t*condition_var, pthread_mutex_t* mutex)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_cond_wait(condition_var, mutex);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_cond_wait(condition_var, mutex);
-    }
-}
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
 
-template<ThreadType type>
-inline int condition_signal(pthread_cond_t* condition_var)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_cond_signal(condition_var);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_cond_signal(condition_var);
-    }
-}
+    int mutex_destroy(BaseMutex* mutex) override;
 
-template<ThreadType type>
-inline int condition_broadcast(pthread_cond_t* condition_var)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_cond_broadcast(condition_var);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_cond_broadcast(condition_var);
-    }
-}
+    int mutex_lock(BaseMutex* mutex) override;
 
-template<ThreadType type>
-inline int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_create(thread, attributes, entry_fun, argument);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_create(thread, attributes, entry_fun, argument);
-    }
-}
+    int mutex_unlock(BaseMutex* mutex) override;
 
-template<ThreadType type>
-inline int thread_join(pthread_t thread, void** return_var = nullptr)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return pthread_join(thread, return_var);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_pthread_join(thread, return_var);
-    }
-}
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
 
-template<ThreadType type>
-inline int semaphore_create(sem_t** semaphore, [[maybe_unused]] const char* semaphore_name)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        sem_unlink(semaphore_name);
-        *semaphore = sem_open(semaphore_name, O_CREAT, 0, 0);
-        if (*semaphore == SEM_FAILED)
-        {
-            return errno;
-        }
-        return 0;
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_sem_init(*semaphore, 0, 0);
-    }
-}
+    int condition_var_destroy(BaseCondVar* condition_var) override;
 
-template<ThreadType type>
-inline int semaphore_destroy(sem_t* semaphore, [[maybe_unused]] const char* semaphore_name)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        sem_unlink(semaphore_name);
-        sem_close(semaphore);
-        return 0;
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_sem_destroy(semaphore);
-    }
-}
+    int condition_wait(BaseCondVar* condition_var, BaseMutex* mutex) override;
 
-template<ThreadType type>
-inline int semaphore_wait(sem_t* semaphore)
-{
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return sem_wait(semaphore);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_sem_wait(semaphore);
-    }
-}
+    int condition_signal(BaseCondVar* condition_var) override;
 
-template<ThreadType type>
-inline int semaphore_signal(sem_t* semaphore)
+    int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
+
+    int thread_join(pthread_t thread, void** return_var) override;
+
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_wait(BaseSemaphore* semaphore) override;
+
+    int semaphore_signal(BaseSemaphore* semaphore) override;
+};
+
+#endif // TWINE_BUILD_WITH_XENOMAI
+
+#ifdef TWINE_BUILD_WITH_EVL
+
+struct EvlMutex : BaseMutex
 {
-    if constexpr (type == ThreadType::PTHREAD)
-    {
-        return sem_post(semaphore);
-    }
-    else if constexpr (type == ThreadType::XENOMAI)
-    {
-        return __cobalt_sem_post(semaphore);
-    }
-}
+    struct evl_mutex mutex;
+};
+
+struct EvlCondVar : BaseCondVar
+{
+    struct evl_event cond_var;
+};
+
+struct EvlSemaphore : BaseSemaphore
+{
+    struct evl_sem semaphore;
+};
+
+class EvlThreadHelper : public BaseThreadHelper
+{
+public:
+    int mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name) override;
+
+    int mutex_destroy(BaseMutex* mutex) override;
+
+    int mutex_lock(BaseMutex* mutex) override;
+
+    int mutex_unlock(BaseMutex* mutex) override;
+
+    int condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name) override;
+
+    int condition_var_destroy(BaseCondVar* condition_var) override;
+
+    int condition_wait(BaseCondVar* condition_var, BaseMutex* mutex) override;
+
+    int condition_signal(BaseCondVar* condition_var) override;
+
+    int thread_create(pthread_t* thread, const pthread_attr_t* attributes, void *(*entry_fun) (void *), void* argument) override;
+
+    int thread_join(pthread_t thread, void** return_var = nullptr) override;
+
+    int semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name) override;
+
+    int semaphore_wait(BaseSemaphore* semaphore) override;
+
+    int semaphore_signal(BaseSemaphore* semaphore) override;
+};
+
+#endif // TWINE_BUILD_WITH_EVL
 
 } // namespace twine
 

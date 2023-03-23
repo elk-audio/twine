@@ -14,6 +14,10 @@
 #include <cobalt/pthread.h>
 #include <xenomai/init.h>
 #pragma GCC diagnostic pop
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/evl.h>
+    #include <evl/thread.h>
+    #include <evl/proxy.h>
 #endif
 
 #include "twine/twine.h"
@@ -72,10 +76,17 @@ void xenomai_thread_init()
     mlockall(MCL_CURRENT|MCL_FUTURE);
     twine::init_xenomai();
 }
-#endif
-#ifndef TWINE_BUILD_WITH_XENOMAI
+#elif TWINE_BUILD_WITH_EVL
 void xenomai_thread_init()
-{ }
+{
+    evl_init();
+    twine::init_xenomai();
+}
+#else
+void xenomai_thread_init()
+{
+    std::cout << "Test not built with xenomai support!" << std::endl;
+}
 #endif
 
 
@@ -125,6 +136,8 @@ void print_iterations(int64_t iter, bool xenomai)
         {
 #ifdef TWINE_BUILD_WITH_XENOMAI
             __cobalt_printf("\rIterations: %i", iter);
+#elif TWINE_BUILD_WITH_EVL
+            evl_printf("\rIterations: %i", iter);
 #endif
         }
         else
@@ -137,6 +150,9 @@ void print_iterations(int64_t iter, bool xenomai)
 
 void* run_stress_test(void* data)
 {
+#ifdef TWINE_BUILD_WITH_EVL
+    evl_attach_self("/condvar_stress_test_main");
+#endif
     auto [cond_vars, frequencies, counts, iters, xenomai, print_timings] =
                *(reinterpret_cast<std::tuple<std::vector<std::unique_ptr<twine::RtConditionVariable>>*,
                                   std::vector<int>*,
@@ -171,6 +187,12 @@ void* run_stress_test(void* data)
             __cobalt_nanosleep(&t, nullptr);
         }
         else
+#elif TWINE_BUILD_WITH_EVL
+        if (xenomai)
+        {
+            evl_usleep(INTERVAL.count() / 1000);
+        }
+        else
 #endif
         {
             std::this_thread::sleep_for(INTERVAL);
@@ -183,23 +205,41 @@ void run_stress_test_in_xenomai_thread([[maybe_unused]] void* data)
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
     /* Threadpool must be controlled from another xenomai thread */
-        struct sched_param rt_params = { .sched_priority = 80 };
-        pthread_attr_t task_attributes;
-        __cobalt_pthread_attr_init(&task_attributes);
+    struct sched_param rt_params = { .sched_priority = 80 };
+    pthread_attr_t task_attributes;
+    __cobalt_pthread_attr_init(&task_attributes);
 
-        pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
-        pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
-        pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
-        pthread_attr_setschedparam(&task_attributes, &rt_params);
-        pthread_t thread;
+    pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&task_attributes, &rt_params);
+    pthread_t thread;
 
-        auto res = __cobalt_pthread_create(&thread, &task_attributes, &run_stress_test, data);
-        if (res != 0)
-        {
-            std::cout << "Failed to start xenomai thread: " << strerror(res) <<std::endl;
-        }
-        /* Wait for the xenomai thread to finish */
-        __cobalt_pthread_join(thread, nullptr);
+    auto res = __cobalt_pthread_create(&thread, &task_attributes, &run_stress_test, data);
+    if (res != 0)
+    {
+        std::cout << "Failed to start xenomai thread: " << strerror(res) <<std::endl;
+    }
+    /* Wait for the xenomai thread to finish */
+    __cobalt_pthread_join(thread, nullptr);
+#elif TWINE_BUILD_WITH_EVL
+    struct sched_param rt_params = { .sched_priority = 80 };
+    pthread_attr_t task_attributes;
+    pthread_attr_init(&task_attributes);
+
+    pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&task_attributes, &rt_params);
+    pthread_t thread;
+
+    auto res = pthread_create(&thread, &task_attributes, &run_stress_test, data);
+    if (res != 0)
+    {
+        std::cout << "Failed to start EVL thread: " << strerror(res) <<std::endl;
+    }
+
+    pthread_join(thread, nullptr);
 #endif
 }
 

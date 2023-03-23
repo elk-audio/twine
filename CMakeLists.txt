@@ -31,11 +31,16 @@ endif()
 #  Build Options       #
 ########################
 
-option(TWINE_WITH_XENOMAI "Build with xenomai realtime thread support" ${TWINE_WITH_XENOMAI_DEFAULT})
-option(TWINE_WITH_TESTS "Build and run unit tests" ${TWINE_WITH_TESTS_DEFAULT})
-option(TWINE_WITH_APPLE_COREAUDIO "Enable Jack support" ${TWINE_WITH_APPLE_COREAUDIO_DEFAULT})
+# _WITH_COBALT would have been a better name here, keeping the old variable for backwards compatibility
+option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
+option(TWINE_WITH_EVL "Build with EVL (Xenomai 4.x) realtime task support" OFF)
+option(TWINE_WITH_TESTS "Build and run unit tests" ON)
 
-set(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+if (TWINE_WITH_XENOMAI AND TWINE_WITH_EVL)
+    message(FATAL_ERROR "Both Xenomai and EVL options set, choose only one of them.")
+endif()
+
+SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
 
 ###################
 # CoreAudio setup #
@@ -51,15 +56,19 @@ endif()
 #  Cross compilation  #
 #######################
 
-set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
+if(TWINE_WITH_XENOMAI)
 
-if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
-    set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
-endif()
+    set(XENOMAI_BASE_DIR "/usr/xenomai" CACHE STRING "xenomai base dir path")
 
-if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
-    set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
-    message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
+    if(NOT "$ENV{CMAKE_SYSROOT}" STREQUAL "")
+        set(CMAKE_SYSROOT "$ENV{CMAKE_SYSROOT}")
+    endif()
+
+    if(NOT "${CMAKE_SYSROOT}" STREQUAL "")
+        set(XENOMAI_BASE_DIR "${CMAKE_SYSROOT}/usr/xenomai")
+        message("XENOMAI_BASE_DIR is " ${XENOMAI_BASE_DIR})
+    endif()
+
 endif()
 
 ##################################
@@ -89,7 +98,7 @@ configure_file(
 # This intentionally does not include all the super-auto-magic linker wrappers,
 # who seems to play very badly with other libraries at static initialization.
 function(add_xenomai_to_target target)
-    target_compile_definitions(${target} PRIVATE -DTWINE_BUILD_WITH_XENOMAI)
+    target_compile_definitions(${target} PRIVATE TWINE_BUILD_WITH_XENOMAI)
 
     # from `xeno-config --skin=posix --cflags`
     set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
@@ -102,7 +111,7 @@ function(add_xenomai_to_target target)
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
-    target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
+    set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} ${COBALT_LIB} rt m)
 endfunction()
 
 function(set_twine_target_properties target)
@@ -126,7 +135,18 @@ endfunction()
 ####################
 
 set(SOURCE_FILES src/twine.cpp
+                 src/thread_helpers_posix.cpp
                  src/apple_threading.cpp)
+
+if (${TWINE_WITH_XENOMAI})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
+endif()
+
+if (${TWINE_WITH_EVL})
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_evl.cpp)
+endif()
+
+#set(TWINE_LINK_LIBRARIES pthread)
 
 # The best way to build both static & dynamic targets
 # would have been to reuse the existing objects as in:
@@ -149,6 +169,7 @@ endif()
 #############
 #  Install  #
 #############
+
 
 install(TARGETS twine
     ARCHIVE DESTINATION lib

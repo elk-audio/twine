@@ -28,18 +28,23 @@
     #pragma GCC diagnostic ignored "-Wunused-parameter"
     #include <cobalt/stdio.h>
     #pragma GCC diagnostic pop
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/proxy.h>
+    #include <evl/clock.h>
 #else
     #include <cstdio>
     #include <cstdarg>
-    #define rt_vfprintf vfprintf
+    #define rt_vfprintf vfprintf // TODO - really needed?
 #endif
 
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "twine_version.h"
-
 #include "worker_pool_implementation.h"
-#include "condition_variable_implementation.h"
+
+#ifndef TWINE_ENABLE_CONDITION_VARIABLE
+    #include "condition_variable_implementation.h"
+#endif
 
 namespace twine {
 
@@ -69,6 +74,7 @@ bool is_current_thread_realtime()
     return ThreadRtFlag::is_realtime();
 }
 
+#ifdef TWINE_BUILD_WITH_XENOMAI
 int rt_printf(const char *format, ...)
 {
     va_list args;
@@ -80,10 +86,15 @@ int rt_printf(const char *format, ...)
 
     return n;
 }
+#elif TWINE_BUILD_WITH_EVL
+    #define rt_printf evl_printf
+#else
+    #define rt_printf printf
+#endif
 
 void init_xenomai()
 {
-#ifdef TWINE_BUILD_WITH_XENOMAI
+#if defined(TWINE_BUILD_WITH_XENOMAI) || defined(TWINE_BUILD_WITH_EVL)
     running_xenomai_realtime.set(true);
 #endif
 }
@@ -93,26 +104,37 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
                                                            bool disable_denormals,
                                                            bool break_on_mode_sw)
 {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+    if (running_xenomai_realtime.is_set())
+	// TODO - add apple_data arguments - or maybe not?
+    {
+        return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, disable_denormals, break_on_mode_sw);
+    }
+#elif TWINE_BUILD_WITH_EVL
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::XENOMAI>>(cores,
-                                                                     apple_data,
-                                                                     disable_denormals,
-                                                                     break_on_mode_sw);
+        return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, disable_denormals, break_on_mode_sw);
     }
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores,
-                                                                 apple_data,
-                                                                 disable_denormals,
-                                                                 break_on_mode_sw);
+#endif
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals, break_on_mode_sw);
 }
 
 std::chrono::nanoseconds current_rt_time()
 {
     if (running_xenomai_realtime.is_set())
     {
+#ifdef TWINE_BUILD_WITH_XENOMAI
         timespec tp;
         __cobalt_clock_gettime(CLOCK_MONOTONIC, &tp);
         return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
+#elif TWINE_BUILD_WITH_EVL
+        timespec tp;
+        evl_read_clock(EVL_CLOCK_MONOTONIC, &tp);
+        return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
+#else
+        assert(false && "Xenomai realtime set without a RT build");
+        return std::chrono::nanoseconds(0);
+#endif
     }
     else
     {
@@ -140,6 +162,7 @@ std::string to_error_string(twine::WorkerPoolStatus status)
     }
 }
 
+#ifndef TWINE_ENABLE_CONDITION_VARIABLE
 std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -150,7 +173,8 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
     }
 #endif
 
-    return std::make_unique<PosixSemaphoreConditionVariable>();
+    return std::make_unique<PosixConditionVariable>();
 }
+#endif
 
 } // twine

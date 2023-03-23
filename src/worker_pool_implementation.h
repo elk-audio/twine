@@ -22,6 +22,7 @@
 
 #include <cassert>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <array>
 #include <cstring>
@@ -29,8 +30,14 @@
 #include <stdexcept>
 #include <string>
 
+#ifdef TWINE_BUILD_WITH_EVL
+    #include <unistd.h>
+    #include <evl/thread.h>
+#endif
+
 #include "apple_threading.h"
 
+#include "twine/twine.h"
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
@@ -80,24 +87,60 @@ public:
      */
     BarrierWithTrigger()
     {
-        if constexpr (type == ThreadType::XENOMAI)
+        if constexpr (type == ThreadType::PTHREAD)
         {
-            _semaphores[0] = &_semaphore_store[0];
-            _semaphores[1] = &_semaphore_store[1];
+            _thread_helper = new PosixThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
         }
-        mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_calling_cond, nullptr);
-        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
+
+            _semaphores[0] = new EvlSemaphore();
+            _semaphores[1] = new EvlSemaphore();
+
+            _calling_mutex = new EvlMutex();
+
+            _calling_cond = new EvlCondVar();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
+
+        int res = _thread_helper->semaphore_create(_semaphores[0], "/twine-barrier-sem-0");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        res = _thread_helper->semaphore_create(_semaphores[1], "/twine-barrier-sem-1");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        _active_sem = _semaphores[0];
+        _thread_helper->mutex_create(_calling_mutex, "/twine-barrier-mutex");
+        _thread_helper->condition_var_create(_calling_cond, "/twine-barrier-condvar");
     }
 
     /**
@@ -105,10 +148,16 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
-        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
+        _thread_helper->mutex_destroy(_calling_mutex);
+        _thread_helper->condition_var_destroy(_calling_cond);
+        _thread_helper->semaphore_destroy(_semaphores[0], "/twine-barrier-sem-0");
+        _thread_helper->semaphore_destroy(_semaphores[1], "/twine-barrier-sem-1");
+
+        delete _semaphores[0];
+        delete _semaphores[1];
+        delete _calling_mutex;
+        delete _calling_cond;
+        delete _thread_helper;
     }
 
     /**
@@ -117,15 +166,15 @@ public:
      */
     void wait()
     {
-        mutex_lock<type>(&_calling_mutex);
-        auto active_sem = _active_sem;
+        _thread_helper->mutex_lock(_calling_mutex);
+        auto active_sem = _semaphores[_active_sem_idx];
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
-            condition_signal<type>(&_calling_cond);
+            _thread_helper->condition_signal(_calling_cond);
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
 
-        semaphore_wait<type>(active_sem);
+        _thread_helper->semaphore_wait(active_sem);
     }
 
     /**
@@ -135,20 +184,20 @@ public:
      */
     void wait_for_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
 
         if (current_threads == _no_threads)
         {
-            mutex_unlock<type>(&_calling_mutex);
+            _thread_helper->mutex_unlock(_calling_mutex);
             return;
         }
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -157,9 +206,9 @@ public:
      */
     void set_no_threads(int threads)
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         _no_threads = threads;
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -167,44 +216,44 @@ public:
      */
     void release_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
 
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     void release_and_wait()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
         int current_threads = _no_threads_currently_on_barrier;
 
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
 private:
@@ -219,13 +268,18 @@ private:
             _active_sem = _semaphores[0];
         }
     }
+    // TODO - more efficient?
+    //{
+    //    _active_sem_idx = 1 - _active_sem_idx;
+    //}
 
-    std::array<sem_t, 2 > _semaphore_store;
-    std::array<sem_t*, 2> _semaphores;
-    sem_t* _active_sem;
+    BaseThreadHelper* _thread_helper;
 
-    pthread_mutex_t _calling_mutex;
-    pthread_cond_t  _calling_cond;
+    std::array<BaseSemaphore*, 2> _semaphores;
+    int _active_sem_idx {0};
+
+    BaseMutex* _calling_mutex;
+    BaseCondVar* _calling_cond;
 
     std::atomic<int> _no_threads_currently_on_barrier{0};
     std::atomic<int> _no_threads{0};
@@ -252,6 +306,26 @@ public:
                                          _break_on_mode_sw(break_on_mode_sw)
 
     {
+        if constexpr (type == ThreadType::PTHREAD)
+        {
+            _thread_helper = new PosixThreadHelper();
+        }
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
 #if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
 
         if (__builtin_available(macOS 11.00, *))
@@ -282,8 +356,10 @@ public:
     {
         if (_thread_handle != 0)
         {
-            thread_join<type>(_thread_handle, nullptr);
+            _thread_helper->thread_join(_thread_handle, nullptr);
         }
+
+        delete _thread_helper;
     }
 
     int run(int sched_priority, [[maybe_unused]] int cpu_id)
@@ -293,29 +369,25 @@ public:
             return EINVAL;
         }
         _priority = sched_priority;
-
+        // TODO - Why was rt_params moved to only apple on te apple branch?
+        struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
 
         pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
         pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
         pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
-
-        auto res = 0;
-
-#ifndef __APPLE__
-        struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_setschedparam(&task_attributes, &rt_params);
-
+        auto res = 0;
+#ifndef __APPLE__
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
         res = pthread_attr_setaffinity_np(&task_attributes, sizeof(cpu_set_t), &cpus);
 #endif
-
         if (res == 0)
         {
-            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = _thread_helper->thread_create(&_thread_handle, &task_attributes, &_worker_function, this);
         }
         pthread_attr_destroy(&task_attributes);
         return res;
@@ -341,14 +413,26 @@ private:
         {
             set_flush_denormals_to_zero();
         }
-        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        if (type == ThreadType::COBALT && _break_on_mode_sw)
         {
-            enable_break_on_mode_sw();
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#endif
         }
 
+        if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+	        auto tfd = evl_attach_self("/twine-worker-%d", gettid());
+            if (_break_on_mode_sw)
+            {
+                evl_set_thread_mode(tfd, T_WOSS, NULL);
+            }
+#endif
 #ifdef TWINE_APPLE_THREADING
         _init_apple_thread();
 #endif
+        }
 
         while (true)
         {
@@ -404,7 +488,7 @@ private:
     }
 
     BarrierWithTrigger<type>&   _barrier;
-    pthread_t                   _thread_handle {0};
+    pthread_t                   _thread_handle{0};
     WorkerCallback              _callback;
     void*                       _callback_data;
 
@@ -423,6 +507,8 @@ private:
     bool                        _disable_denormals;
     int                         _priority {0};
     bool                        _break_on_mode_sw;
+
+    BaseThreadHelper*           _thread_helper;
 };
 
 template <ThreadType type>
@@ -491,7 +577,6 @@ public:
         _cores_usage[core]++;
 
         auto res = errno_to_worker_status(worker->run(sched_priority, core));
-
         if (res == WorkerPoolStatus::OK)
         {
             // Wait until the thread is idle to avoid synchronisation issues

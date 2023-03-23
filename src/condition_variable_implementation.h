@@ -29,10 +29,12 @@
 #include "twine_internal.h"
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-#include <poll.h>
-#include <sys/eventfd.h>
-#include <rtdm/ipc.h>
-#include <cobalt/sys/socket.h>
+    #include <poll.h>
+    #include <sys/eventfd.h>
+    #include <rtdm/ipc.h>
+    #include <cobalt/sys/socket.h>
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/xbuf.h>
 #endif
 
 namespace twine {
@@ -263,7 +265,118 @@ void XenomaiConditionVariable::_set_up_files()
     _poll_targets[1] = {.fd = _non_rt_file, .events = POLLIN, .revents = 0};
 }
 
-#endif
+#endif // TWINE_BUILD_WITH_XENOMAI
+
+#ifdef TWINE_BUILD_WITH_EVL
+using MsgType = uint8_t;
+using NonRTMsgType = uint64_t;
+
+constexpr size_t NUM_ELEMENTS = 64;
+constexpr size_t XBUF_SIZE = 1024;
+constexpr int INFINITE_POLL_TIME = -1;
+
+/**
+ * @brief Implementation using EVL xbuf mechanisms
+ */
+class EvlConditionVariable : public RtConditionVariable
+{
+public:
+    EvlConditionVariable();
+
+    virtual ~EvlConditionVariable() override;
+
+    void notify() override;
+
+    bool wait() override;
+
+private:
+    int _xbuf_to_rt{0};
+    int _xbuf_to_nonrt{0};
+
+    int _pollfd_to_rt{0};
+    pollfd _pollfd_to_nonrt;
+};
+
+
+
+EvlConditionVariable::EvlConditionVariable()
+{
+    _xbuf_to_rt = evl_create_xbuf(XBUF_SIZE, 0, EVL_CLONE_PRIVATE | EVL_CLONE_NONBLOCK, "twinecv-tort-buf-%d", gettid());
+     if (_xbuf_to_rt < 0)
+     {
+        throw std::runtime_error(strerror(errno));
+     }
+     _pollfd_to_rt = evl_new_poll();
+     if (_pollfd_to_rt < 0)
+     {
+        throw std::runtime_error(strerror(errno));
+     }
+     auto res = evl_add_pollfd(_pollfd_to_rt, _xbuf_to_rt, POLLIN, evl_nil);
+     if (res < 0)
+     {
+        throw std::runtime_error(strerror(errno));
+     }
+
+    _xbuf_to_nonrt = evl_create_xbuf(0, XBUF_SIZE, EVL_CLONE_PRIVATE | EVL_CLONE_NONBLOCK, "twinecv-tononrt-buf-%d", gettid());
+    if (_xbuf_to_rt < 0)
+    {
+        throw std::runtime_error(strerror(errno));
+    }
+    _pollfd_to_nonrt = {.fd = _xbuf_to_nonrt, .events = POLLIN, .revents = 0};
+}
+
+EvlConditionVariable::~EvlConditionVariable()
+{
+    close(_xbuf_to_rt);
+    close(_pollfd_to_rt);
+    close(_xbuf_to_nonrt);
+}
+
+void EvlConditionVariable::notify()
+{
+    if (ThreadRtFlag::is_realtime())
+    {
+        MsgType data = 1;
+        oob_write(_xbuf_to_nonrt, &data, sizeof(data));
+    }
+    else
+    {
+        NonRTMsgType data = 1;
+        write(_xbuf_to_rt, &data, sizeof(data));
+    }
+}
+
+bool EvlConditionVariable::wait()
+{
+    struct evl_poll_event pollset;
+    MsgType buffer[NUM_ELEMENTS];
+    int len = 0;
+
+    if (ThreadRtFlag::is_realtime())
+    {
+        auto res = evl_poll(_pollfd_to_rt, &pollset, 1);
+        if (res < 0)
+        {
+            throw std::runtime_error(strerror(errno));
+        }
+        len += oob_read(_pollfd_to_rt, &buffer, sizeof(buffer));
+    }
+    else
+    {
+        poll(&_pollfd_to_nonrt, 1, INFINITE_POLL_TIME);
+        if (_pollfd_to_nonrt.revents != 0)
+        {
+            len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
+            _pollfd_to_nonrt.revents = 0;
+        }
+    }
+
+    return len > 1;
+}
+
+#endif // TWINE_BUILD_WITH_EVL
+
 }// namespace twine
 
 #endif //TWINE_CONDITION_VARIABLE_IMPLEMENTATION_H
+

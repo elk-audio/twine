@@ -47,7 +47,8 @@ target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 target_link_libraries(unit_tests "${TEST_LINK_LIBRARIES}")
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)
-
+# TODO - Line below not in apple branch
+target_compile_options(unit_tests PRIVATE -Wall -Wextra)
 if (${TWINE_WITH_XENOMAI})
     target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
 endif()
