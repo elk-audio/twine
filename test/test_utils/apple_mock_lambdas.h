@@ -3,9 +3,9 @@
 
 #include "twine/twine.h"
 
-#include "../test_utils/apple_coreaudio_mockup.h"
-
 #ifdef __APPLE__
+
+#include "../test_utils/apple_coreaudio_mockup.h"
 
 #define MOCK_APPLE_THREADING
 
