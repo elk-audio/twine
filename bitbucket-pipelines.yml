@@ -6,7 +6,7 @@ pipelines:
   default:
     - step:
         name: Build twine + tests
-        image: ubuntu:20.04
+        image: ubuntu:22.04
         script:
           - apt-get update
           - DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends make g++ cmake git ca-certificates ssh
