@@ -27,9 +27,11 @@ set(TEST_LINK_LIBRARIES
         gmock
         gmock_main
         twine)
+## TODO - test should not link with twine (this pulls in evl/xenomai)
 
-# Unit tests are build without xenomai regardless
+# Unit tests are build without xenomai/evl regardless
 remove_definitions(-DTWINE_BUILD_WITH_XENOMAI)
+remove_definitions(-DTWINE_BUILD_WITH_EVL)
 
 if (${TWINE_WITH_APPLE_COREAUDIO})
     set(TEST_FILES ${TEST_FILES}
