@@ -116,7 +116,7 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
         return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, disable_denormals, break_on_mode_sw);
     }
 #endif
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, disable_denormals, break_on_mode_sw);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, nullptr, disable_denormals, break_on_mode_sw);
 }
 
 std::chrono::nanoseconds current_rt_time()
@@ -173,7 +173,7 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
     }
 #endif
 
-    return std::make_unique<PosixConditionVariable>();
+    return std::make_unique<PosixSemaphoreConditionVariable>();
 }
 #endif
 

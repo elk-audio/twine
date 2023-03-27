@@ -50,7 +50,8 @@ void set_flush_denormals_to_zero();
 
 inline void enable_break_on_mode_sw()
 {
-    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+    // TODO - under Cobalt only?
+    //pthread_setmode_np(0, PTHREAD_WARNSW, 0);
 }
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
@@ -257,7 +258,7 @@ public:
     }
 
 private:
-    void _swap_semaphores()
+    /*void _swap_semaphores()
     {
         if (_active_sem == _semaphores[0])
         {
@@ -267,11 +268,12 @@ private:
         {
             _active_sem = _semaphores[0];
         }
-    }
+    }*/
     // TODO - more efficient?
-    //{
-    //    _active_sem_idx = 1 - _active_sem_idx;
-    //}
+    void _swap_semaphores()
+    {
+        _active_sem_idx = 1 - _active_sem_idx;
+    }
 
     BaseThreadHelper* _thread_helper;
 
@@ -478,7 +480,7 @@ private:
 #endif
 
     friend class WorkerPoolImpl<ThreadType::PTHREAD>;
-    friend class WorkerPoolImpl<ThreadType::XENOMAI>;
+    friend class WorkerPoolImpl<ThreadType::COBALT>;
 
     void _stop_thread()
     {
