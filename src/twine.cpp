@@ -108,15 +108,15 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
     if (running_xenomai_realtime.is_set())
 	// TODO - add apple_data arguments - or maybe not?
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, disable_denormals, break_on_mode_sw);
+        return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
 #elif TWINE_BUILD_WITH_EVL
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, disable_denormals, break_on_mode_sw);
+        return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
 #endif
-    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, nullptr, disable_denormals, break_on_mode_sw);
+    return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, apple_data, disable_denormals, break_on_mode_sw);
 }
 
 std::chrono::nanoseconds current_rt_time()

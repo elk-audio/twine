@@ -481,6 +481,7 @@ private:
 
     friend class WorkerPoolImpl<ThreadType::PTHREAD>;
     friend class WorkerPoolImpl<ThreadType::COBALT>;
+    friend class WorkerPoolImpl<ThreadType::EVL>;
 
     void _stop_thread()
     {
