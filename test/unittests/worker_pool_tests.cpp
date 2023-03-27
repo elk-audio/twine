@@ -117,12 +117,14 @@ TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 #endif
 
     auto res = _module_under_test.add_worker(worker_function, &a);
-
     ASSERT_EQ(WorkerPoolStatus::OK, res.first);
+
     res = _module_under_test.add_worker(worker_function, &b);
     ASSERT_EQ(WorkerPoolStatus::OK, res.first);
+
     ASSERT_FALSE(a);
     ASSERT_FALSE(b);
+
     _module_under_test.wakeup_workers();
     _module_under_test.wait_for_workers_idle();
 
@@ -292,39 +294,40 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
     // Second Invocation:
     // Subsequent invocation can go well, so that devices size can fail.
     .WillOnce(Return(noErr))
-    // Getting the size of devices - pretending there's one device, so that getting name can fail
-    .WillOnce(mock_lambdas.mock_size_of_one_device)
+    // Getting the size of devices, so that getting name can fail
+    .WillOnce(mock_lambdas.mock_size_of_two_devices)
     // Getting the size of the name
     .WillOnce(mock_lambdas.mock_size_of_name)
 
     // Third invocation:
-    // Getting the size of devices - pretending there's one device, so that getting workgroup size can fail.
-    .WillOnce(mock_lambdas.mock_size_of_one_device)
+    // Getting the size of devices, so that getting workgroup size can fail.
+    .WillOnce(mock_lambdas.mock_size_of_two_devices)
     // Getting the size of the name.
     .WillOnce(mock_lambdas.mock_size_of_name)
     // Pretending failure in getting the size of workgroup.
     .WillOnce(mock_lambdas.mock_workgroup_size_failure)
 
     // Fourth Invocation:
-    // Getting the size of devices - pretending there's one device.
-    .WillOnce(mock_lambdas.mock_size_of_one_device)
+    // Getting the size of devices
+    .WillOnce(mock_lambdas.mock_size_of_two_devices)
     // Getting the size of the name.
     .WillOnce(mock_lambdas.mock_size_of_name)
     // Getting the size of workgroup can succeed, so that getting workgroup can fail.
     .WillOnce(Return(noErr))
 
     // Fifth Invocation:
-    // Getting the size of devices - pretending there's one device.
-    .WillOnce(mock_lambdas.mock_size_of_one_device)
+    // Getting the size of devices.
+    .WillOnce(mock_lambdas.mock_size_of_two_devices)
     // Getting the size of the name.
     .WillOnce(mock_lambdas.mock_size_of_name)
     // Getting the size of workgroup can succeed, so that workgroup cancellation status can fail.
     .WillOnce(Return(noErr))
 
     // Sixth Invocation:
-    // Getting the size of devices - pretending there's one device.
-    .WillOnce(mock_lambdas.mock_size_of_one_device)
+    // Getting the size of devices.
+    .WillOnce(mock_lambdas.mock_size_of_two_devices)
     // Getting the size of the name.
+    .WillOnce(mock_lambdas.mock_size_of_name)
     .WillOnce(mock_lambdas.mock_size_of_name);
 
     EXPECT_CALL(_mock, AudioObjectGetPropertyData)
@@ -365,6 +368,7 @@ TEST_F(AppleThreadingTest, GetDeviceWorkgroupFailures)
     // Allowing getting data structure to succeed...
     .WillOnce(mock_lambdas.mock_devices_data_structure)
     // And getting the device name succeeds, BUT RETURNS ONE THAT WON'T MATCH.
+    .WillOnce(mock_lambdas.mock_device_name)
     .WillOnce(mock_lambdas.mock_name_mismatch_failure);
 
     // Letting the fetching of workgroup cancellation status fail (sixth)
