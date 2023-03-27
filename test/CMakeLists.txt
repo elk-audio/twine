@@ -36,7 +36,7 @@ if (${TWINE_WITH_APPLE_COREAUDIO})
             test_utils/apple_coreaudio_mockup.cpp)
 
     set(TEST_COMPILE_DEFINITIONS ${TEST_COMPILE_DEFINITIONS} -DTWINE_BUILD_WITH_APPLE_COREAUDIO)
-    set(TEST_LINK_LIBRARIES ${TEST_LINK_LIBRARIES} "-framework CoreAudio")
+    set(TEST_LINK_LIBRARIES ${TEST_LINK_LIBRARIES} "-framework CoreAudio  -framework Foundation")
 endif()
 
 add_executable(unit_tests ${TEST_FILES})

@@ -1,6 +1,8 @@
 #ifndef SUSHI_APPLE_COREAUDIO_MOCKUP_H
 #define SUSHI_APPLE_COREAUDIO_MOCKUP_H
 
+#ifdef __APPLE__
+
 #include <CoreAudio/AudioHardware.h>
 #include <mach/mach_types.h>
 
@@ -30,5 +32,7 @@ public:
 
     static AppleAudioHardwareMockup* instance;
 };
+
+#endif
 
 #endif// SUSHI_APPLE_COREAUDIO_MOCKUP_H

@@ -3,9 +3,9 @@
 
 #include "twine/twine.h"
 
-#include "../test_utils/apple_coreaudio_mockup.h"
-
 #ifdef __APPLE__
+
+#include "../test_utils/apple_coreaudio_mockup.h"
 
 #define MOCK_APPLE_THREADING
 
@@ -59,6 +59,7 @@ struct MockLambdas
     AppleTestData& test_data;
 
     MockSizeFunction mock_size_of_one_device;
+    MockSizeFunction mock_size_of_two_devices;
     MockSizeFunction mock_size_of_name;
     MockSizeFunction mock_size_of_workgroup;
 
@@ -78,40 +79,58 @@ struct MockLambdas
     {
         // Mocking size fetching:
 
-        mock_size_of_one_device = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size)
+        mock_size_of_one_device = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                                      UInt32, const void*, UInt32* out_data_size)
         {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            *out_data_size = 4;
+            *out_data_size = sizeof(AudioDeviceID);
 
             return kAudioHardwareNoError;
         };
 
-        mock_size_of_name = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size)
+        mock_size_of_two_devices = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                                       UInt32, const void*, UInt32* out_data_size)
         {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            *out_data_size = sizeof(test_data.device_name);
+            *out_data_size = sizeof(AudioDeviceID) * 2;
 
             return kAudioHardwareNoError;
         };
 
-        mock_size_of_workgroup = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* out_data_size)
+        mock_size_of_name = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                                UInt32, const void*, UInt32* out_data_size)
+        {
+            EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
+
+            EXPECT_NE(address, nullptr);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
+            EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
+
+            *out_data_size = sizeof(CFStringRef);
+
+            return kAudioHardwareNoError;
+        };
+
+        mock_size_of_workgroup = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                     UInt32, const void*, UInt32* out_data_size)
         {
             // The mocked test doesn't create a workgroup instance to compare against here.
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
             *out_data_size = static_cast<int>(sizeof(test_data.workgroup));
@@ -121,85 +140,127 @@ struct MockLambdas
 
         // Mocking size fetch failures:
 
-        mock_device_size_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*)
+        mock_device_size_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                       UInt32, const void*, UInt32*)
         {
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
             return 10;
         };
 
-        mock_workgroup_size_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*) {
+        mock_workgroup_size_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                          UInt32, const void*, UInt32*)
+        {
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
             return 10;
         };
 
         // Mocking data fetching:
 
-        mock_devices_data_structure = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data)
+        mock_devices_data_structure = [=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                                          UInt32, const void*, UInt32*, void* out_data)
         {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            EXPECT_EQ(sizeof(out_data), sizeof(test_data.device_ids));
-            memcpy(out_data, test_data.device_ids, sizeof(test_data.device_ids));
+            auto size1 = sizeof(out_data);
+            auto size2 = sizeof(test_data.device_ids);
+
+            EXPECT_EQ(size1, size2);
+
+            memcpy(out_data, test_data.device_ids, sizeof(out_data));
+
             return noErr;
         };
 
-        mock_device_name = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data)
+        mock_device_name = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                               UInt32, const void*, UInt32* size, void* out_data)
         {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            strcpy((char*)out_data, test_data.device_name);
+            auto size_of_ref = sizeof(CFStringRef);
 
-            *size = sizeof(test_data.device_name);
+            // This method mocks an apple-API method, that allocates memory,
+            // which the invoker then has to release with CFRelease.
+            // We do that in the production code e.g. get_device_workgroup,
+            // meaning, if the test leaks memory, that is an issue with the production code - not this test.
+            auto cfStr = CFStringCreateWithCString(kCFAllocatorDefault,
+                                                   test_data.device_name,
+                                                   kCFStringEncodingUTF8);
+
+            memcpy(out_data, &cfStr, size_of_ref);
+
+            *size = size_of_ref;
 
             return noErr;
         };
 
-        mock_workgroup = [&](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data)
+        mock_workgroup = [=](AudioObjectID audio_object_id, const AudioObjectPropertyAddress* address,
+                             UInt32, const void*, UInt32*, void* out_data)
         {
             EXPECT_EQ(audio_object_id, kAudioObjectSystemObject);
 
             EXPECT_NE(address, nullptr);
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
-            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeWildcard);
+            EXPECT_EQ(address->mScope, kAudioObjectPropertyScopeGlobal);
             EXPECT_EQ(address->mElement, kAudioObjectPropertyElementMain);
 
-            EXPECT_EQ(sizeof(out_data), sizeof(test_data.workgroup));
+            auto size1 = sizeof(out_data);
+            auto size2 = sizeof(test_data.workgroup);
+
+            EXPECT_EQ(size1, size2);
+
             return noErr;
         };
 
         // Mocking data structure failures
 
-        mock_data_structure_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void*)
+        mock_data_structure_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                          UInt32, const void*, UInt32*, void*)
         {
             EXPECT_EQ(address->mSelector, kAudioHardwarePropertyDevices);
             return 10;
         };
 
-        mock_name_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void*)
+        mock_name_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                UInt32, const void*, UInt32*, void*)
         {
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
             return 10;
         };
 
-        mock_name_mismatch_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32* size, void* out_data)
+        mock_name_mismatch_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                         UInt32, const void*, UInt32* size, void* out_data)
         {
-            EXPECT_EQ(address->mSelector, kAudioDevicePropertyDeviceName);
-            strcpy((char*)out_data, test_data.device_name);
-            *size = sizeof(test_data.device_name);
+            EXPECT_EQ(address->mSelector, kAudioObjectPropertyName);
+
+            auto size_of_ref = sizeof(CFStringRef);
+
+            // This method mocks an apple-API method, that allocates memory,
+            // which the invoker then has to release with CFRelease.
+            // We do that in the production code e.g. get_device_workgroup,
+            // meaning, if the test leaks memory, that is an issue with the production code - not this test.
+            auto cfStr = CFStringCreateWithCString(kCFAllocatorDefault,
+                                                   test_data.device_name,
+                                                   kCFStringEncodingUTF8);
+
+            memcpy(out_data, &cfStr, size_of_ref);
+
+            *size = size_of_ref;
+
             return noErr;
         };
 
-        mock_workgroup_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address, UInt32, const void*, UInt32*, void* out_data)
+        mock_workgroup_failure = [&](AudioObjectID, const AudioObjectPropertyAddress* address,
+                                     UInt32, const void*, UInt32*, void* out_data)
         {
             EXPECT_EQ(address->mSelector, kAudioDevicePropertyIOThreadOSWorkgroup);
             EXPECT_EQ(sizeof(out_data), sizeof(test_data.workgroup));
@@ -211,7 +272,7 @@ struct MockLambdas
 void workgroup_success_expectations(testing::StrictMock<AppleAudioHardwareMockup>& mock, MockLambdas& mock_lambdas)
 {
     EXPECT_CALL(mock, AudioObjectGetPropertyDataSize)
-            .WillOnce(mock_lambdas.mock_size_of_one_device) // Getting the size of devices - pretending there's one device:
+            .WillOnce(mock_lambdas.mock_size_of_two_devices) // Getting the size of devices
             .WillOnce(mock_lambdas.mock_size_of_name) // Getting the size of the name:
             .WillOnce(mock_lambdas.mock_size_of_workgroup); // Getting the size of workgroup:
 
@@ -226,10 +287,10 @@ void workgroup_success_expectations(testing::StrictMock<AppleAudioHardwareMockup
 void workgroup_repeated_success_expectations(testing::StrictMock<AppleAudioHardwareMockup>& mock, MockLambdas mock_lambdas)
 {
     EXPECT_CALL(mock, AudioObjectGetPropertyDataSize)
-            .WillOnce(mock_lambdas.mock_size_of_one_device) // Getting the size of devices - pretending there's one device
+            .WillOnce(mock_lambdas.mock_size_of_two_devices) // Getting the size of devices
             .WillOnce(mock_lambdas.mock_size_of_name) // Getting the size of the name
             .WillOnce(mock_lambdas.mock_size_of_workgroup) // Getting the size of workgroup
-            .WillOnce(mock_lambdas.mock_size_of_one_device) // Getting the size of devices - pretending there's one device
+            .WillOnce(mock_lambdas.mock_size_of_two_devices) // Getting the size of devices
             .WillOnce(mock_lambdas.mock_size_of_name) // Getting the size of the name
             .WillOnce(mock_lambdas.mock_size_of_workgroup); // Getting the size of workgroup
 
@@ -247,7 +308,7 @@ void workgroup_repeated_success_expectations(testing::StrictMock<AppleAudioHardw
 void workgroup_failure_expectations(testing::StrictMock<AppleAudioHardwareMockup>& mock, MockLambdas& mock_lambdas)
 {
     EXPECT_CALL(mock, AudioObjectGetPropertyDataSize)
-            .WillOnce(mock_lambdas.mock_size_of_one_device) // Getting the size of devices - pretending there's one device:
+            .WillOnce(mock_lambdas.mock_size_of_two_devices) // Getting the size of devices
             .WillOnce(mock_lambdas.mock_size_of_name) // Getting the size of the name:
             .WillOnce(mock_lambdas.mock_size_of_workgroup); // Getting the size of workgroup:
 
@@ -262,7 +323,7 @@ void workgroup_failure_expectations(testing::StrictMock<AppleAudioHardwareMockup
 #else
 struct AppleTestData
 {
-    twine::apple::AppleMultiThreadData apple_data {"AudioDeviceName", 64, 48000};
+    twine::apple::AppleMultiThreadData apple_data;
 };
 #endif
 
