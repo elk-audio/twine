@@ -45,8 +45,8 @@ add_executable(unit_tests ${TEST_FILES})
 
 target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS})
 target_compile_options(unit_tests PRIVATE -Wall -Wextra)
-target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 target_link_libraries(unit_tests "${TEST_LINK_LIBRARIES}")
+target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)
 # TODO - Line below not in apple branch
