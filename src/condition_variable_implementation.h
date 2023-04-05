@@ -107,6 +107,37 @@ bool PosixSemaphoreConditionVariable::wait()
     return true;
 }
 
+/* The maximum number of condition variable instances depend on the
+ * number of rtp file descriptors enabled in the the xenomai kernel.
+ * It is set with CONFIG_XENO_OPT_PIPE_NRDEV or CONFIG_EVL_NR_XBUFS, pass the same value
+ * to twine when building for xenomai */
+
+constexpr size_t MAX_RT_COND_VARS = TWINE_MAX_RT_CONDITION_VARS;
+
+// Note, static variables are guaranteed to be zero initialized
+static std::array<bool, MAX_RT_COND_VARS> active_ids;
+static std::mutex mutex;
+
+int get_next_id()
+{
+    for (auto i = 0u; i < active_ids.size(); ++i)
+    {
+        if (active_ids[i] == false)
+        {
+            active_ids[i] = true;
+            return i;
+        }
+    }
+    throw std::runtime_error("Maximum number of RtConditionVariables reached");
+}
+
+void deregister_id(int id)
+{
+    assert(id < static_cast<int>(MAX_RT_COND_VARS));
+    std::unique_lock<std::mutex> lock(mutex);
+    active_ids[id] = false;
+}
+
 #ifdef TWINE_BUILD_WITH_XENOMAI
 using MsgType = uint8_t;
 using NonRTMsgType = uint64_t;
@@ -143,37 +174,6 @@ private:
 
     std::array<pollfd, 2> _poll_targets;
 };
-
-/* The maximum number of condition variable instances depend on the
- * number of rtp file descriptors enabled in the the xenomai kernel.
- * It is set with CONFIG_XENO_OPT_PIPE_NRDEV, pass the same value
- * to twine when building for xenomai */
-
-constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
-
-// Note, static variables are guaranteed to be zero initialized
-static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
-static std::mutex mutex;
-
-int get_next_id()
-{
-    for (auto i = 0u; i < active_ids.size(); ++i)
-    {
-        if (active_ids[i] == false)
-        {
-            active_ids[i] = true;
-            return i;
-        }
-    }
-    throw std::runtime_error("Maximum number of RtConditionVariables reached");
-}
-
-void deregister_id(int id)
-{
-    assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
-    std::unique_lock<std::mutex> lock(mutex);
-    active_ids[id] = false;
-}
 
 XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
 {
@@ -268,10 +268,8 @@ void XenomaiConditionVariable::_set_up_files()
 #endif // TWINE_BUILD_WITH_XENOMAI
 
 #ifdef TWINE_BUILD_WITH_EVL
-using MsgType = uint8_t;
-using NonRTMsgType = uint64_t;
 
-constexpr size_t NUM_ELEMENTS = 64;
+using MsgType = uint8_t;
 constexpr size_t XBUF_SIZE = 1024;
 constexpr int INFINITE_POLL_TIME = -1;
 
@@ -281,7 +279,7 @@ constexpr int INFINITE_POLL_TIME = -1;
 class EvlConditionVariable : public RtConditionVariable
 {
 public:
-    EvlConditionVariable();
+    EvlConditionVariable(int id);
 
     virtual ~EvlConditionVariable() override;
 
@@ -292,86 +290,57 @@ public:
 private:
     int _xbuf_to_rt{0};
     int _xbuf_to_nonrt{0};
-
-    int _pollfd_to_rt{0};
-    pollfd _pollfd_to_nonrt;
+    int          _id{0};
 };
 
-
-
-EvlConditionVariable::EvlConditionVariable()
+EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
 {
-    _xbuf_to_rt = evl_create_xbuf(XBUF_SIZE, 0, EVL_CLONE_PRIVATE | EVL_CLONE_NONBLOCK, "twinecv-tort-buf-%d", gettid());
+    _xbuf_to_rt = evl_create_xbuf(0, XBUF_SIZE, EVL_CLONE_PRIVATE, "twinecv-tort-buf-%d", _id);
      if (_xbuf_to_rt < 0)
      {
         throw std::runtime_error(strerror(errno));
      }
-     _pollfd_to_rt = evl_new_poll();
-     if (_pollfd_to_rt < 0)
-     {
-        throw std::runtime_error(strerror(errno));
-     }
-     auto res = evl_add_pollfd(_pollfd_to_rt, _xbuf_to_rt, POLLIN, evl_nil);
-     if (res < 0)
-     {
-        throw std::runtime_error(strerror(errno));
-     }
 
-    _xbuf_to_nonrt = evl_create_xbuf(0, XBUF_SIZE, EVL_CLONE_PRIVATE | EVL_CLONE_NONBLOCK, "twinecv-tononrt-buf-%d", gettid());
+    _xbuf_to_nonrt = evl_create_xbuf(XBUF_SIZE, 0, EVL_CLONE_PRIVATE, "twinecv-tononrt-buf-%d", _id);
     if (_xbuf_to_rt < 0)
     {
         throw std::runtime_error(strerror(errno));
     }
-    _pollfd_to_nonrt = {.fd = _xbuf_to_nonrt, .events = POLLIN, .revents = 0};
 }
 
 EvlConditionVariable::~EvlConditionVariable()
 {
     close(_xbuf_to_rt);
-    close(_pollfd_to_rt);
     close(_xbuf_to_nonrt);
 }
 
 void EvlConditionVariable::notify()
 {
-    if (ThreadRtFlag::is_realtime())
+    MsgType data = 1;
+    if (!evl_is_inband())
     {
-        MsgType data = 1;
         oob_write(_xbuf_to_nonrt, &data, sizeof(data));
     }
     else
     {
-        NonRTMsgType data = 1;
         write(_xbuf_to_rt, &data, sizeof(data));
     }
 }
 
 bool EvlConditionVariable::wait()
 {
-    struct evl_poll_event pollset;
-    MsgType buffer[NUM_ELEMENTS];
+    MsgType buffer;
     int len = 0;
 
-    if (ThreadRtFlag::is_realtime())
+    if (!evl_is_inband())
     {
-        auto res = evl_poll(_pollfd_to_rt, &pollset, 1);
-        if (res < 0)
-        {
-            throw std::runtime_error(strerror(errno));
-        }
-        len += oob_read(_pollfd_to_rt, &buffer, sizeof(buffer));
+        len += oob_read(_xbuf_to_rt, &buffer, sizeof(buffer));
     }
     else
     {
-        poll(&_pollfd_to_nonrt, 1, INFINITE_POLL_TIME);
-        if (_pollfd_to_nonrt.revents != 0)
-        {
-            len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
-            _pollfd_to_nonrt.revents = 0;
-        }
+        len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
     }
-
-    return len > 1;
+    return len > 0;
 }
 
 #endif // TWINE_BUILD_WITH_EVL

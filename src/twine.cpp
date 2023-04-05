@@ -175,7 +175,8 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
 #ifdef TWINE_BUILD_WITH_EVL
     if (running_xenomai_realtime.is_set())
     {
-        return std::make_unique<EvlConditionVariable>();
+        int id = get_next_id();
+        return std::make_unique<EvlConditionVariable>(id);
     }
 #endif
     return std::make_unique<PosixSemaphoreConditionVariable>();
