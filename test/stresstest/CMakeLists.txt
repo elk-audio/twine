@@ -28,11 +28,9 @@ if (${TWINE_WITH_XENOMAI})
 endif()
 
 
-add_executable(cond_var_full_duplex_test cond_var_full_duplex_test.cpp)
-target_link_libraries(cond_var_full_duplex_test PRIVATE PRIVATE ${STRESS_TEST_LINK_LIBRARIES})
-target_include_directories(cond_var_full_duplex_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_compile_features(cond_var_full_duplex_test PRIVATE cxx_std_17)
-
-if (${TWINE_WITH_XENOMAI})
-    add_xenomai_to_target(cond_var_full_duplex_test)
+if (${TWINE_WITH_EVL})
+    add_executable(cond_var_full_duplex_test cond_var_full_duplex_test.cpp)
+    target_link_libraries(cond_var_full_duplex_test PRIVATE PRIVATE ${STRESS_TEST_LINK_LIBRARIES})
+    target_include_directories(cond_var_full_duplex_test PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_compile_features(cond_var_full_duplex_test PRIVATE cxx_std_17)
 endif()

@@ -6,9 +6,6 @@
 
 namespace twine {
 
-CobaltThreadHelper::~CobaltThreadHelper()
-{}
-
 int CobaltThreadHelper::mutex_create(BaseMutex* mutex, [[maybe_unused]] const char* name)
 {
     return __cobalt_pthread_mutex_init(to_posix_mutex(mutex), nullptr);
@@ -29,7 +26,7 @@ int CobaltThreadHelper::mutex_unlock(BaseMutex* mutex)
     return __cobalt_pthread_mutex_unlock(to_posix_mutex(mutex));
 }
 
-int CobaltThreadHelper::condition_var_create(BaseCondVar* condition_var)
+int CobaltThreadHelper::condition_var_create(BaseCondVar* condition_var, [[maybe_unused]] const char* name)
 {
     return __cobalt_pthread_cond_init(to_posix_cond(condition_var), nullptr);
 }

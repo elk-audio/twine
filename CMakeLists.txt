@@ -98,6 +98,7 @@ configure_file(
 # This intentionally does not include all the super-auto-magic linker wrappers,
 # who seems to play very badly with other libraries at static initialization.
 function(add_xenomai_to_target target)
+    message("Building ${target} with Xenomai cobalt")
     target_compile_definitions(${target} PRIVATE TWINE_BUILD_WITH_XENOMAI)
 
     # from `xeno-config --skin=posix --cflags`
@@ -111,7 +112,7 @@ function(add_xenomai_to_target target)
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
     target_compile_options(${target} PRIVATE ${XENOMAI_C_FLAGS})
     target_include_directories(${target} PRIVATE ${XENOMAI_INCLUDE_DIRS})
-    set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} ${COBALT_LIB} rt m)
+    target_link_libraries(${target} PRIVATE ${COBALT_LIB} rt m)
 endfunction()
 
 function(set_twine_target_properties target)
@@ -125,7 +126,7 @@ function(set_twine_target_properties target)
         add_xenomai_to_target(${target})
     endif()
     if (${TWINE_WITH_EVL})
-         message("Building Twine with EVL")
+         message("Building ${target} with EVL")
          target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
          set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
@@ -150,8 +151,6 @@ endif()
 if (${TWINE_WITH_EVL})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_evl.cpp)
 endif()
-
-#set(TWINE_LINK_LIBRARIES pthread)
 
 # The best way to build both static & dynamic targets
 # would have been to reuse the existing objects as in:
