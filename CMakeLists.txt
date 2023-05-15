@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.8)
 
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
 set(TWINE_VERSION_MAJOR 0)
-set(TWINE_VERSION_MINOR 3)
-set(TWINE_VERSION_REVISION 3)
+set(TWINE_VERSION_MINOR 4)
+set(TWINE_VERSION_REVISION 0)
 
 project(twine
     DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
