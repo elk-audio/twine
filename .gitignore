@@ -37,9 +37,10 @@
 !.gitignore
 
 # Build and scratch directories
+compile_commands.json
 scratch/
 */scratch
-build/
+build*/
 cmake-build-debug/
 cmake-build-release/
 third-party/install/

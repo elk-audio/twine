@@ -1,14 +1,37 @@
-# This is an example Starter pipeline configuration
-# Use a skeleton to build, test and deploy using manual and parallel steps
+# Only use spaces to indent your .yml configuration.
 # -----
 # You can specify a custom docker image from Docker Hub as your build environment.
 
-image: atlassian/default-image:3
-
 pipelines:
   default:
-    - parallel:
-      - step:
-          name: 'Build and Test'
-          script:
-            - echo "Your build and test goes here..."
+    - step:
+        name: Build twine + tests
+        image: ubuntu:22.04
+        script:
+          - apt-get update
+          - DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends make g++ cmake git ca-certificates ssh
+
+          # Print the Linux version.
+          #- echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+          #- export TERM=linux
+          #- echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+          #- uname -a
+          # Print the gcc version.
+          #- apt-get update -y
+          #- apt install build-essential -y
+          #- gcc --version
+          #- apt-get install -y software-properties-common
+          #- add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          - cmake --version
+          - git submodule update --init --recursive
+
+          # Set test data dir (for running unit test manually)
+          - mkdir build
+          - cd build
+          - cmake .. -DCMAKE_BUILD_TYPE=Debug -DTWINE_WITH_XENOMAI=Off
+          - make twine
+          - make unit_tests
+          - cd test
+          # Run unit tests with some tests test disabled because they require rt priority
+          - ./unit_tests --gtest_filter=-PthreadWorkerPoolTest:*
+          # Build stress tests too for good measure

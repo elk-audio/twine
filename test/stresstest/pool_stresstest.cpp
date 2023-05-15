@@ -9,10 +9,14 @@
 #include <sys/mman.h>
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <cobalt/pthread.h>
-#include <xenomai/init.h>
-#pragma GCC diagnostic pop
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+    #include <cobalt/pthread.h>
+    #include <xenomai/init.h>
+    #pragma GCC diagnostic pop
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/evl.h>
+    #include <evl/thread.h>
+    #include <evl/proxy.h>
 #endif
 
 #include "twine/twine.h"
@@ -43,7 +47,7 @@ const float co_b0 = (1.0f - w0_cos) / 2.0f * norm;;
 const float co_b1 = (1 - w0_cos) * norm;
 const float co_b2 = co_b0;
 
-using AudioBuffer = std::array<float, 128>;
+using Buffer = std::array<float, 128>;
 using FilterRegister = std::array<float, 2>;
 using TimeStamp = std::chrono::nanoseconds;
 
@@ -77,7 +81,7 @@ void update_stats(TimeStats& data, TimeStamp new_time)
 
 struct ProcessData
 {
-    AudioBuffer buffer;
+    Buffer buffer;
     FilterRegister mem;
     TimeStamp start_time{0};
     TimeStamp end_time{0};
@@ -106,21 +110,6 @@ void worker_function(void* data)
     process_data->count++;
 }
 
-std::string to_error_string(twine::WorkerPoolStatus status)
-{
-    switch (status)
-    {
-        case twine::WorkerPoolStatus::PERMISSION_DENIED:
-            return "Permission denied";
-
-        case twine::WorkerPoolStatus::LIMIT_EXCEEDED:
-            return "Thread count limit exceeded";
-
-        default:
-            return "Error";
-    }
-}
-
 #ifdef TWINE_BUILD_WITH_XENOMAI
 void xenomai_thread_init()
 {
@@ -139,8 +128,13 @@ void xenomai_thread_init()
     mlockall(MCL_CURRENT|MCL_FUTURE);
     twine::init_xenomai();
 }
-#endif
-#ifndef TWINE_BUILD_WITH_XENOMAI
+#elif TWINE_BUILD_WITH_EVL
+void xenomai_thread_init()
+{
+    evl_init();
+    twine::init_xenomai();
+}
+#else
 void xenomai_thread_init()
 {
     std::cout << "Test not built with xenomai support!" << std::endl;
@@ -148,7 +142,7 @@ void xenomai_thread_init()
 #endif
 
 
-std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
+std::tuple<int, int, int, bool, bool, int, double, std::string> parse_opts(int argc, char** argv)
 {
     int workers = DEFAULT_WORKERS;
     int cores = DEFAULT_CORES;
@@ -157,7 +151,11 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
     bool print_timings = false;
     signed char c;
 
-    while ((c = getopt(argc, argv, "w:c:i:xt")) != -1)
+    int chunk_size = 64;
+    double sample_rate = 48000;
+    std::string device_name = "AggregateAudio";
+
+    while ((c = getopt(argc, argv, "w:c:i:xt:b:s:d:")) != -1)
     {
         switch (c)
         {
@@ -180,6 +178,15 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
                     xenomai = true;
                 }
                 break;
+            case 'b':
+                chunk_size = atoi(optarg);
+                break;
+            case 's':
+                sample_rate = static_cast<double>(atoi(optarg));
+                break;
+            case 'd':
+                device_name = optarg;
+                break;
             case '?':
                 std::cout << "Options are: -w[n of worker threads], -c[n of cores], -i[n of iterations], -x - use xenomai threads, -t - print timings for each iteration" << std::endl;
                 abort();
@@ -189,7 +196,8 @@ std::tuple<int, int, int, bool, bool> parse_opts(int argc, char** argv)
         }
     }
     return std::make_tuple(workers, cores, iters, xenomai,
-                           print_timings);
+                           print_timings,
+                           chunk_size, sample_rate, device_name);
 }
 
 
@@ -210,6 +218,8 @@ void update_timings(std::vector<ProcessData>* data, int iter, bool xenomai, bool
         {
 #ifdef TWINE_BUILD_WITH_XENOMAI
             __cobalt_printf("Iteration %i: total time: %.1f us, avg: %.1f us, min: %.1f us, max: %.1f us\n", iter, current_total, mean_time, min_time, max_time);
+#elif TWINE_BUILD_WITH_EVL
+            evl_printf("Iteration %i: total time: %.1f us, avg: %.1f us, min: %.1f us, max: %.1f us\n", iter, current_total, mean_time, min_time, max_time);
 #endif
         } else
         {
@@ -229,6 +239,8 @@ void update_timings(std::vector<ProcessData>* data, int iter, bool xenomai, bool
             {
 #ifdef TWINE_BUILD_WITH_XENOMAI
                 __cobalt_printf("Worker %i: start offset: %i us, total: %i us\n", id, offset_time.count(), process_time.count());
+#elif TWINE_BUILD_WITH_EVL
+                evl_printf("Worker %i: start offset: %i us, total: %i us\n", id, offset_time.count(), process_time.count());
 #endif
             } else
             {
@@ -251,6 +263,8 @@ void print_iterations(int iter, bool xenomai)
         {
 #ifdef TWINE_BUILD_WITH_XENOMAI
             __cobalt_printf("\rIterations: %i", iter);
+#elif TWINE_BUILD_WITH_EVL
+            evl_printf("\rIterations: %i", iter);
 #endif
         }
         else
@@ -277,6 +291,9 @@ void print_final_stats(const std::vector<ProcessData>& data)
 
 void* run_stress_test(void* data)
 {
+#ifdef TWINE_BUILD_WITH_EVL
+    evl_attach_self("/pool_stress_test_main");
+#endif
     twine::set_flush_denormals_to_zero();
     auto [pool, process_data, iters, xenomai, print_timings] = *(reinterpret_cast<std::tuple<twine::WorkerPool*, std::vector<ProcessData>*, int, bool, bool>*>(data));
     for (int i = 0; i < iters; ++i)
@@ -300,8 +317,10 @@ void* run_stress_test(void* data)
                  * that would starve the linux kernel, so we leave a time slice for it here */
                 timespec t;
                 t.tv_sec = 0;
-                t.tv_nsec = 5000000;
+                t.tv_nsec = 5'000'000;
                 __cobalt_nanosleep(&t, nullptr);
+#elif TWINE_BUILD_WITH_EVL
+                evl_usleep(50'000);
 #endif
             }
         }
@@ -313,34 +332,60 @@ void* run_stress_test(void* data)
 void run_stress_test_in_xenomai_thread([[maybe_unused]] void* data)
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
-        /* Threadpool must be controlled from another xenomai thread */
-        struct sched_param rt_params = { .sched_priority = 80 };
-        pthread_attr_t task_attributes;
-        __cobalt_pthread_attr_init(&task_attributes);
+    /* Threadpool must be controlled from another xenomai thread */
+    struct sched_param rt_params = { .sched_priority = 80 };
+    pthread_attr_t task_attributes;
+    __cobalt_pthread_attr_init(&task_attributes);
 
-        pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
-        pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
-        pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
-        pthread_attr_setschedparam(&task_attributes, &rt_params);
-        pthread_t thread;
+    pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&task_attributes, &rt_params);
+    pthread_t thread;
 
-        auto res = __cobalt_pthread_create(&thread, &task_attributes, &run_stress_test, data);
-        if (res != 0)
-        {
-            std::cout << "Failed to start xenomai thread: " << strerror(res) <<std::endl;
-        }
-        /* Wait for the xenomai thread to finish */
-        __cobalt_pthread_join(thread, nullptr);
+    auto res = __cobalt_pthread_create(&thread, &task_attributes, &run_stress_test, data);
+    if (res != 0)
+    {
+        std::cout << "Failed to start xenomai thread: " << strerror(res) <<std::endl;
+    }
+    /* Wait for the xenomai thread to finish */
+    __cobalt_pthread_join(thread, nullptr);
+#elif TWINE_BUILD_WITH_EVL
+    struct sched_param rt_params = { .sched_priority = 80 };
+    pthread_attr_t task_attributes;
+    pthread_attr_init(&task_attributes);
+
+    pthread_attr_setdetachstate(&task_attributes, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setinheritsched(&task_attributes, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
+    pthread_attr_setschedparam(&task_attributes, &rt_params);
+    pthread_t thread;
+
+    auto res = pthread_create(&thread, &task_attributes, &run_stress_test, data);
+    if (res != 0)
+    {
+        std::cout << "Failed to start EVL thread: " << strerror(res) <<std::endl;
+    }
+
+    pthread_join(thread, nullptr);
 #endif
 }
 
 int main(int argc, char **argv)
 {
-    auto [workers, cores, iters, xenomai, timings] = parse_opts(argc, argv);
+    auto [workers, cores, iters, xenomai, timings, chunk_size, sample_rate, device_name] = parse_opts(argc, argv);
 
     std::vector<ProcessData> data;
     data.reserve(workers);
-    auto worker_pool = twine::WorkerPool::create_worker_pool(cores);
+
+    twine::apple::AppleMultiThreadData apple_data;
+#ifdef TWINE_APPLE_THREADING
+    apple_data.chunk_size = chunk_size;
+    apple_data.current_sample_rate = sample_rate;
+    apple_data.device_name = device_name;
+#endif
+
+    auto worker_pool = twine::WorkerPool::create_worker_pool(cores, apple_data);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -358,9 +403,9 @@ int main(int argc, char **argv)
 
         data.push_back(d);
         auto res = worker_pool->add_worker(worker_function, &data[i]);
-        if (res != twine::WorkerPoolStatus::OK)
+        if (res.first != twine::WorkerPoolStatus::OK)
         {
-            std::cout << "Failed to start workers: " << to_error_string(res) << std::endl;
+            std::cout << "Failed to start workers: " << to_error_string(res.first) << std::endl;
             return -1;
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -12,12 +12,92 @@
  * If not, see http://www.gnu.org/licenses/ .
  */
 
+/**
+ * @brief Twine library API definition
+ * @copyright 2017-2023 Elk Audio AB, Stockholm
+ */
+
 #ifndef TWINE_TWINE_H_
 #define TWINE_TWINE_H_
 
 #include <memory>
 #include <chrono>
 #include <optional>
+#include <string>
+#include <functional>
+
+#ifdef TWINE_APPLE_THREADING
+#include <mach/mach_time.h>
+
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+#include <os/workgroup.h>
+#include <AudioToolbox/AudioToolbox.h>
+#include <AudioUnit/AudioUnit.h>
+#endif
+
+namespace twine::apple
+{
+enum class AppleThreadingStatus
+{
+    OK = 0,
+    WG_CANCELLED = 1,
+    WG_FAILED = 2,
+    WG_SIZE_FAILED = 3,
+    FETCH_NAME_SIZE_FAILED = 4,
+    FETCH_NAME_FAILED = 5,
+    PD_FAILED = 6,
+    PD_SIZE_FAILED = 7,
+    MACOS_11_NOT_DETECTED = 8,
+    INVALID_DEVICE_NAME_PASSED = 9,
+
+    REALTIME_OK = 10,
+    REALTIME_FAILED = 11,
+    NO_WORKGROUP_PASSED = 12,
+    WORKGROUP_ALREADY_CANCELLED = 13,
+    WORKGROUP_JOINING_UNKNOWN_FAILURE = 14,
+
+    EMPTY = 15
+};
+
+typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
+
+/**
+ * A structure defining what data need to be stored for
+ * audio-rate worker threads forming part of the audio workgroup.
+ * This data is passed to Worker Pools - If on Apple.
+ * If not, it is excluded.
+ */
+struct AppleMultiThreadData
+{
+    // The CoreAudio device name, needed for fetching the workgroup ID.
+    std::string device_name;
+
+    // These are used by Apple real-time thread groups to calculate the thread periodicity.
+    // Make sure you set them to the values used in your audio application.
+    double current_sample_rate = 0;
+    int chunk_size = 0;
+};
+
+}
+
+#else
+
+namespace twine::apple
+{
+
+enum class AppleThreadingStatus
+{
+    OK = 0,
+    EMPTY = 19
+};
+
+typedef void* AppleMultiThreadData;
+
+typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
+
+}
+
+#endif // __APPLE__
 
 namespace twine {
 
@@ -68,6 +148,8 @@ enum class WorkerPoolStatus
     INVALID_ARGUMENTS
 };
 
+[[nodiscard]] std::string to_error_string(twine::WorkerPoolStatus status);
+
 /**
  * @brief Returns the current time at the time of the call. This function is safe to call
  *        from an rt context. The time returned should not be used for synchronising audio
@@ -85,6 +167,7 @@ public:
      * if construction fails.
      * @param cores The maximum number of cores to use, must not be higher
      *              than the number of cores on the machine.
+     * @param apple_data A AppleMultiThreadData struct, with fields set for setting up Apple real-time threads.
      * @param disable_denormals If set, all worker thread sets the FTZ (flush denormals to zero)
      *                          and DAC (denormals are zero) flags.
      * @param break_on_mode_sw If set, enables the break_on_mode_swich flag for every worker
@@ -93,15 +176,16 @@ public:
      *                         effect for posix threads.
      * @return
      */
-    static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
-                                                          bool disable_denormals = true,
-                                                          bool break_on_mode_sw = false);
+    [[nodiscard]] static std::unique_ptr<WorkerPool> create_worker_pool(int cores,
+                                                                        [[maybe_unused]] apple::AppleMultiThreadData apple_data,
+                                                                        bool disable_denormals = true,
+                                                                        bool break_on_mode_sw = false);
 
     virtual ~WorkerPool() = default;
 
     /**
      * @brief Add a worker to the pool
-     * @param worker_cb The worker callback function that will called by he worker
+     * @param worker_cb The worker callback function that will be called by the worker
      * @param worker_data A data pointer that will be passed to the worker callback
      * @param sched_priority Worker priority in [0, 100] (higher numbers mean higher priorities)
      * @param cpu_id Optional CPU core affinity preference. If left unspecified,
@@ -109,9 +193,10 @@ public:
      *
      * @return WorkerPoolStatus::OK if the operation succeed, error status otherwise
      */
-    virtual WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
-                                        int sched_priority=DEFAULT_SCHED_PRIORITY,
-                                        std::optional<int> cpu_id=std::nullopt) = 0;
+    [[nodiscard]] virtual std::pair<WorkerPoolStatus, apple::AppleThreadingStatus> add_worker(WorkerCallback worker_cb,
+                                                                                              void* worker_data,
+                                                                                              int sched_priority = DEFAULT_SCHED_PRIORITY,
+                                                                                              std::optional<int> cpu_id = std::nullopt) = 0;
 
     /**
      * @brief Wait for all workers to finish and become idle. Will block until all
@@ -136,6 +221,9 @@ protected:
     WorkerPool() = default;
 };
 
+// WIP: temporarily disabling condition variables for EVL porting
+#ifndef TWINE_ENABLE_CONDITION_VARIABLE
+
 /**
  * @brief Condition variable designed to signal a lower priority non-realtime thread
  *        from a realtime thread without causing mode switches or interfering with
@@ -150,7 +238,7 @@ public:
      *        kernel or the maximum number of instances have been reached.
      * @return
      */
-    static std::unique_ptr<RtConditionVariable> create_rt_condition_variable();
+    [[nodiscard]] static std::unique_ptr<RtConditionVariable> create_rt_condition_variable();
 
     virtual ~RtConditionVariable() = default;
 
@@ -171,6 +259,8 @@ public:
 protected:
     RtConditionVariable() = default;
 };
+
+#endif
 
 }// namespace twine
 

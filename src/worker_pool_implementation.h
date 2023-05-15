@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -14,7 +14,7 @@
 
 /**
  * @brief Worker pool implementation
- * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ * @copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
 #ifndef TWINE_WORKER_POOL_IMPLEMENTATION_H
@@ -22,22 +22,36 @@
 
 #include <cassert>
 #include <atomic>
+#include <memory>
 #include <vector>
 #include <array>
 #include <cstring>
 #include <cerrno>
 #include <stdexcept>
+#include <string>
 
+#ifdef TWINE_BUILD_WITH_EVL
+    #include <unistd.h>
+    #include <evl/thread.h>
+#endif
+
+#include "apple_threading.h"
+
+#include "twine/twine.h"
 #include "thread_helpers.h"
 #include "twine_internal.h"
 
 namespace twine {
 
+template <ThreadType type>
+class WorkerPoolImpl;
+
 void set_flush_denormals_to_zero();
 
 inline void enable_break_on_mode_sw()
 {
-    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+    // TODO - under Cobalt only?
+    //pthread_setmode_np(0, PTHREAD_WARNSW, 0);
 }
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
@@ -70,28 +84,64 @@ class BarrierWithTrigger
 public:
     TWINE_DECLARE_NON_COPYABLE(BarrierWithTrigger);
     /**
-     * @brief Multithread barrier with trigger functionality
+     * @brief Multi-thread barrier with trigger functionality
      */
     BarrierWithTrigger()
     {
-        if constexpr (type == ThreadType::XENOMAI)
+        if constexpr (type == ThreadType::PTHREAD)
         {
-            _semaphores[0] = &_semaphore_store[0];
-            _semaphores[1] = &_semaphore_store[1];
+            _thread_helper = new PosixThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
         }
-        mutex_create<type>(&_calling_mutex, nullptr);
-        condition_var_create<type>(&_calling_cond, nullptr);
-        int res = semaphore_create<type>(&_semaphores[0], "twine_semaphore_0");
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
+
+            _semaphores[0] = new PosixSemaphore();
+            _semaphores[1] = new PosixSemaphore();
+
+            _calling_mutex = new PosixMutex();
+
+            _calling_cond = new PosixCondVar();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
+
+            _semaphores[0] = new EvlSemaphore();
+            _semaphores[1] = new EvlSemaphore();
+
+            _calling_mutex = new EvlMutex();
+
+            _calling_cond = new EvlCondVar();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
+
+        int res = _thread_helper->semaphore_create(_semaphores[0], "/twine-barrier-sem-0");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        res = semaphore_create<type>(&_semaphores[1], "twine_semaphore_1");
+        res = _thread_helper->semaphore_create(_semaphores[1], "/twine-barrier-sem-1");
         if (res != 0)
         {
             throw std::runtime_error(strerror(res));
         }
-        _active_sem = _semaphores[0];
+        _thread_helper->mutex_create(_calling_mutex, "/twine-barrier-mutex");
+        _thread_helper->condition_var_create(_calling_cond, "/twine-barrier-condvar");
     }
 
     /**
@@ -99,10 +149,16 @@ public:
      */
     ~BarrierWithTrigger()
     {
-        mutex_destroy<type>(&_calling_mutex);
-        condition_var_destroy<type>(&_calling_cond);
-        semaphore_destroy<type>(_semaphores[0], "twine_semaphore_0");
-        semaphore_destroy<type>(_semaphores[1], "twine_semaphore_1");
+        _thread_helper->mutex_destroy(_calling_mutex);
+        _thread_helper->condition_var_destroy(_calling_cond);
+        _thread_helper->semaphore_destroy(_semaphores[0], "/twine-barrier-sem-0");
+        _thread_helper->semaphore_destroy(_semaphores[1], "/twine-barrier-sem-1");
+
+        delete _semaphores[0];
+        delete _semaphores[1];
+        delete _calling_mutex;
+        delete _calling_cond;
+        delete _thread_helper;
     }
 
     /**
@@ -111,15 +167,15 @@ public:
      */
     void wait()
     {
-        mutex_lock<type>(&_calling_mutex);
-        auto active_sem = _active_sem;
+        _thread_helper->mutex_lock(_calling_mutex);
+        auto active_sem = _semaphores[_active_sem_idx];
         if (++_no_threads_currently_on_barrier >= _no_threads)
         {
-            condition_signal<type>(&_calling_cond);
+            _thread_helper->condition_signal(_calling_cond);
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
 
-        semaphore_wait<type>(active_sem);
+        _thread_helper->semaphore_wait(active_sem);
     }
 
     /**
@@ -129,20 +185,20 @@ public:
      */
     void wait_for_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         int current_threads = _no_threads_currently_on_barrier;
 
         if (current_threads == _no_threads)
         {
-            mutex_unlock<type>(&_calling_mutex);
+            _thread_helper->mutex_unlock(_calling_mutex);
             return;
         }
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -151,9 +207,9 @@ public:
      */
     void set_no_threads(int threads)
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         _no_threads = threads;
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     /**
@@ -161,48 +217,48 @@ public:
      */
     void release_all()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
 
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
     void release_and_wait()
     {
-        mutex_lock<type>(&_calling_mutex);
+        _thread_helper->mutex_lock(_calling_mutex);
         assert(_no_threads_currently_on_barrier == _no_threads);
         _no_threads_currently_on_barrier = 0;
 
-        auto prev_sem = _active_sem;
+        auto prev_sem = _semaphores[_active_sem_idx];
         _swap_semaphores();
 
         for (int i = 0; i < _no_threads; ++i)
         {
-            semaphore_signal<type>(prev_sem);
+            _thread_helper->semaphore_signal(prev_sem);
         }
 
         int current_threads = _no_threads_currently_on_barrier;
 
         while (current_threads < _no_threads)
         {
-            condition_wait<type>(&_calling_cond, &_calling_mutex);
+            _thread_helper->condition_wait(_calling_cond, _calling_mutex);
             current_threads = _no_threads_currently_on_barrier;
         }
-        mutex_unlock<type>(&_calling_mutex);
+        _thread_helper->mutex_unlock(_calling_mutex);
     }
 
 private:
-    void _swap_semaphores()
+    /*void _swap_semaphores()
     {
         if (_active_sem == _semaphores[0])
         {
@@ -212,14 +268,20 @@ private:
         {
             _active_sem = _semaphores[0];
         }
+    }*/
+    // TODO - more efficient?
+    void _swap_semaphores()
+    {
+        _active_sem_idx = 1 - _active_sem_idx;
     }
 
-    std::array<sem_t, 2 > _semaphore_store;
-    std::array<sem_t*, 2> _semaphores;
-    sem_t* _active_sem;
+    BaseThreadHelper* _thread_helper;
 
-    pthread_mutex_t _calling_mutex;
-    pthread_cond_t  _calling_cond;
+    std::array<BaseSemaphore*, 2> _semaphores;
+    int _active_sem_idx {0};
+
+    BaseMutex* _calling_mutex;
+    BaseCondVar* _calling_cond;
 
     std::atomic<int> _no_threads_currently_on_barrier{0};
     std::atomic<int> _no_threads{0};
@@ -231,24 +293,75 @@ class WorkerThread
 public:
     TWINE_DECLARE_NON_COPYABLE(WorkerThread);
 
-    WorkerThread(BarrierWithTrigger<type>& barrier, WorkerCallback callback,
-                                         void*callback_data, std::atomic_bool& running_flag,
-                                         bool disable_denormals,
-                                         bool break_on_mode_sw): _barrier(barrier),
-                                                                  _callback(callback),
-                                                                  _callback_data(callback_data),
-                                                                  _running(running_flag),
-                                                                  _disable_denormals(disable_denormals),
-                                                                  _break_on_mode_sw(break_on_mode_sw)
+    WorkerThread(BarrierWithTrigger<type>& barrier,
+                 WorkerCallback callback,
+                 void* callback_data,
+                 apple::AppleMultiThreadData& apple_data,
+                 std::atomic_bool& running_flag,
+                 bool disable_denormals,
+                 bool break_on_mode_sw): _barrier(barrier),
+                                         _callback(callback),
+                                         _callback_data(callback_data),
+                                         _apple_data(apple_data),
+                                         _pool_running(running_flag),
+                                         _disable_denormals(disable_denormals),
+                                         _break_on_mode_sw(break_on_mode_sw)
 
-    {}
+    {
+        if constexpr (type == ThreadType::PTHREAD)
+        {
+            _thread_helper = new PosixThreadHelper();
+        }
+        else if constexpr (type == ThreadType::COBALT)
+        {
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            _thread_helper = new CobaltThreadHelper();
+#else
+            assert(false && "Not built with Cobalt support");
+#endif
+        }
+        else if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+            _thread_helper = new EvlThreadHelper();
+#else
+            assert(false && "Not built with EVL support");
+#endif
+        }
+#if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
+
+        if (__builtin_available(macOS 11.00, *))
+        {
+            // The workgroup will be the same for all threads, so it only needs to be fetched once.
+            auto device_workgroup_result = twine::apple::get_device_workgroup(_apple_data.device_name);
+
+            if (device_workgroup_result.second != twine::apple::AppleThreadingStatus::OK)
+            {
+                _status = device_workgroup_result.second;
+            }
+            else
+            {
+                _status = apple::AppleThreadingStatus::OK;
+            }
+
+            _p_workgroup = device_workgroup_result.first;
+        }
+        else
+        {
+            _status = apple::AppleThreadingStatus::OK;
+            _p_workgroup = nullptr;
+        }
+#endif
+    }
 
     ~WorkerThread()
     {
         if (_thread_handle != 0)
         {
-            thread_join<type>(_thread_handle, nullptr);
+            _thread_helper->thread_join(_thread_handle, nullptr);
         }
+
+        delete _thread_helper;
     }
 
     int run(int sched_priority, [[maybe_unused]] int cpu_id)
@@ -258,6 +371,7 @@ public:
             return EINVAL;
         }
         _priority = sched_priority;
+        // TODO - Why was rt_params moved to only apple on te apple branch?
         struct sched_param rt_params = {.sched_priority = sched_priority};
         pthread_attr_t task_attributes;
         pthread_attr_init(&task_attributes);
@@ -275,7 +389,7 @@ public:
 #endif
         if (res == 0)
         {
-            res = thread_create<type>(&_thread_handle, &task_attributes, &_worker_function, this);
+            res = _thread_helper->thread_create(&_thread_handle, &task_attributes, &_worker_function, this);
         }
         pthread_attr_destroy(&task_attributes);
         return res;
@@ -287,6 +401,11 @@ public:
         return nullptr;
     }
 
+    apple::AppleThreadingStatus init_status()
+    {
+        return _status;
+    }
+
 private:
     void _internal_worker_function()
     {
@@ -296,31 +415,103 @@ private:
         {
             set_flush_denormals_to_zero();
         }
-        if (type == ThreadType::XENOMAI && _break_on_mode_sw)
+        if (type == ThreadType::COBALT && _break_on_mode_sw)
         {
-            enable_break_on_mode_sw();
+#ifdef TWINE_BUILD_WITH_XENOMAI
+            pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#endif
+        }
+
+        if constexpr (type == ThreadType::EVL)
+        {
+#ifdef TWINE_BUILD_WITH_EVL
+	        auto tfd = evl_attach_self("/twine-worker-%d", gettid());
+            if (_break_on_mode_sw)
+            {
+                evl_set_thread_mode(tfd, T_WOSS, NULL);
+            }
+#endif
+#ifdef TWINE_APPLE_THREADING
+        _init_apple_thread();
+#endif
         }
 
         while (true)
         {
             _barrier.wait();
-            if (_running.load() == false)
+            if (_pool_running.load() == false || _thread_running.load() == false)
             {
                 // condition checked when coming out of wait as we might want to exit immediately here
                 break;
             }
             _callback(_callback_data);
         }
+
+#if defined(TWINE_APPLE_THREADING) && defined(TWINE_BUILD_WITH_APPLE_COREAUDIO)
+        apple::leave_workgroup_if_needed(&_join_token, _p_workgroup);
+#endif
+    }
+
+#if defined(TWINE_APPLE_THREADING)
+    void _init_apple_thread()
+    {
+        assert(_apple_data.chunk_size != 0);
+        assert(_apple_data.current_sample_rate != 0);
+
+        double period_ms = std::max(1000.0 * _apple_data.chunk_size / _apple_data.current_sample_rate,
+                                    1.0);
+
+        if (apple::set_current_thread_to_realtime(period_ms) == false)
+        {
+            _status = apple::AppleThreadingStatus::REALTIME_FAILED;
+        }
+
+        if (__builtin_available(macOS 11.00, *))
+        {
+            apple::AppleThreadingStatus status;
+
+            std::tie(status, _join_token) = apple::join_workgroup(_p_workgroup);
+            if (status != apple::AppleThreadingStatus::OK)
+            {
+                _status = status;
+            }
+        }
+    }
+#endif
+
+    friend class WorkerPoolImpl<ThreadType::PTHREAD>;
+    friend class WorkerPoolImpl<ThreadType::COBALT>;
+    friend class WorkerPoolImpl<ThreadType::EVL>;
+
+    void _stop_thread()
+    {
+        _thread_running.store(false);
+
+        _barrier.release_all();
     }
 
     BarrierWithTrigger<type>&   _barrier;
     pthread_t                   _thread_handle{0};
     WorkerCallback              _callback;
     void*                       _callback_data;
-    const std::atomic_bool&     _running;
+
+    apple::AppleMultiThreadData& _apple_data;
+
+#ifdef TWINE_APPLE_THREADING
+    os_workgroup_join_token_s   _join_token;
+    os_workgroup_t              _p_workgroup;
+#endif
+
+    std::atomic<apple::AppleThreadingStatus> _status {apple::AppleThreadingStatus::OK};
+
+    const std::atomic_bool&     _pool_running;
+    std::atomic_bool            _thread_running {true};
+
     bool                        _disable_denormals;
     int                         _priority {0};
     bool                        _break_on_mode_sw;
+
+    BaseThreadHelper*           _thread_helper;
 };
 
 template <ThreadType type>
@@ -330,11 +521,13 @@ public:
     TWINE_DECLARE_NON_COPYABLE(WorkerPoolImpl);
 
     explicit WorkerPoolImpl(int cores,
+                            [[maybe_unused]] apple::AppleMultiThreadData apple_data,
                             bool disable_denormals,
                             bool break_on_mode_sw) : _no_cores(cores),
                                                      _cores_usage(cores, 0),
                                                      _disable_denormals(disable_denormals),
-                                                     _break_on_mode_sw(break_on_mode_sw)
+                                                     _break_on_mode_sw(break_on_mode_sw),
+                                                     _apple_data(apple_data)
     {}
 
     ~WorkerPoolImpl()
@@ -344,9 +537,10 @@ public:
         _barrier.release_all();
     }
 
-    WorkerPoolStatus add_worker(WorkerCallback worker_cb, void* worker_data,
-                                int sched_priority=75,
-                                std::optional<int> cpu_id=std::nullopt) override
+    std::pair<WorkerPoolStatus, apple::AppleThreadingStatus> add_worker(WorkerCallback worker_cb,
+                                                                        void* worker_data,
+                                                                        int sched_priority = DEFAULT_SCHED_PRIORITY,
+                                                                        std::optional<int> cpu_id = std::nullopt) override
     {
         int core = 0;
         if (cpu_id.has_value())
@@ -354,12 +548,12 @@ public:
             core = cpu_id.value();
             if ( (core < 0) || (core >= _no_cores) )
             {
-                return WorkerPoolStatus::INVALID_ARGUMENTS;
+                return {WorkerPoolStatus::INVALID_ARGUMENTS, apple::AppleThreadingStatus::EMPTY};
             }
         }
         else
         {
-            // If no core is specified, pick the first core with least usage
+            // If no core is specified, pick the first core with the least usage
             int min_idx = _no_cores - 1;
             int min_usage = _cores_usage[min_idx];
             for (int n = _no_cores-1; n >= 0; n--)
@@ -374,8 +568,13 @@ public:
             core = min_idx;
         }
 
-        auto worker = std::make_unique<WorkerThread<type>>(_barrier, worker_cb, worker_data, _running,
-                                                           _disable_denormals, _break_on_mode_sw);
+        auto worker = std::make_unique<WorkerThread<type>>(_barrier,
+                                                           worker_cb,
+                                                           worker_data,
+                                                           _apple_data,
+                                                           _running,
+                                                           _disable_denormals,
+                                                           _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
 
         _cores_usage[core]++;
@@ -387,12 +586,33 @@ public:
             _no_workers++;
             _workers.push_back(std::move(worker));
             _barrier.wait_for_all();
+
+            // Currently, potential failures in worker threads happen only during initialisation.
+            // If that changes in the future, checking the status only on start will not suffice.
+            auto& w = _workers.back();
+            if (w->init_status() != apple::AppleThreadingStatus::OK)
+            {
+                auto status = w->init_status();
+
+                // On failure, the thread is removed and discarded.
+                // The Twine host needs to decide if this is considered recoverable, or if it should exit.
+                w->_stop_thread();
+
+                _no_workers--;
+                _barrier.set_no_threads(_no_workers);
+                _cores_usage[core]--;
+
+                _workers.pop_back();
+
+                return {WorkerPoolStatus::ERROR, status};
+            }
         }
         else
         {
             _barrier.set_no_threads(_no_workers);
         }
-        return res;
+
+        return {res, apple::AppleThreadingStatus::OK};
     }
 
     void wait_for_workers_idle() override
@@ -419,6 +639,8 @@ private:
     bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
     std::vector<std::unique_ptr<WorkerThread<type>>> _workers;
+
+    apple::AppleMultiThreadData _apple_data;
 };
 
 }// namespace twine

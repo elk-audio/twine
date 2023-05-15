@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -17,55 +17,125 @@
 
 #include <algorithm>
 #include <mutex>
+#include <string>
 #include <condition_variable>
 #include <exception>
 #include <cstring>
 #include <cassert>
+#include <cstdlib>
+
+#include <semaphore.h>
 
 #include "twine_internal.h"
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-#include <poll.h>
-#include <sys/eventfd.h>
-#include <rtdm/ipc.h>
-#include <cobalt/sys/socket.h>
+    #include <poll.h>
+    #include <sys/eventfd.h>
+    #include <rtdm/ipc.h>
+    #include <cobalt/sys/socket.h>
+#elif TWINE_BUILD_WITH_EVL
+    #include <evl/xbuf.h>
 #endif
 
 namespace twine {
 
 /**
- * @brief Implementation with regular c++ std library constructs for
- *        use in a regular linux context.
+ * @brief Implementation using posix semaphores for use in regular linux and MacOs
  */
-class PosixConditionVariable : public RtConditionVariable
+
+constexpr std::string_view COND_VAR_BASE_NAME = "/twine_cond_";
+constexpr int MAX_RETRIES = 100;
+
+class PosixSemaphoreConditionVariable : public RtConditionVariable
 {
 public:
-    ~PosixConditionVariable() override = default;
+    PosixSemaphoreConditionVariable();
+
+    ~PosixSemaphoreConditionVariable() override;
 
     void notify() override;
 
     bool wait() override;
 
 private:
-    bool                    _flag{false};
-    std::mutex              _mutex;
-    std::condition_variable _cond_var;
+    std::string   _name;
+    sem_t*        _semaphore;
 };
 
-void PosixConditionVariable::notify()
+PosixSemaphoreConditionVariable::PosixSemaphoreConditionVariable() : _semaphore(nullptr)
 {
-    std::unique_lock<std::mutex> lock(_mutex);
-    _flag = true;
-    _cond_var.notify_one();
+    int retries = MAX_RETRIES;
+    std::srand(std::time(nullptr));
+
+    while (--retries > 0)
+    {
+        // To avoid name collisions, each semaphore has a randomized suffix added to it
+        std::string name = std::string(COND_VAR_BASE_NAME).append(std::to_string(std::rand()));
+        _semaphore = sem_open(name.c_str(), O_CREAT | O_EXCL, 0, 0);
+        if (_semaphore == SEM_FAILED)
+        {
+            if (errno != EEXIST)
+            {
+                auto err_str = std::string("Failed to initialize RtConditionVariable, ") + strerror(errno);
+                throw std::runtime_error(err_str.c_str());
+            }
+            continue;
+        }
+        _name = name;
+        return;
+    }
+    throw std::runtime_error("Failed to initialize RtConditionVariable, no more retries.");
 }
 
-bool PosixConditionVariable::wait()
+PosixSemaphoreConditionVariable::~PosixSemaphoreConditionVariable()
 {
-    std::unique_lock<std::mutex> lock(_mutex);
-    _cond_var.wait(lock);
-    bool notified = _flag;
-    _flag = false;
-    return notified;
+    if (_semaphore)
+    {
+        this->notify();
+        sem_unlink(_name.c_str());
+    }
+}
+
+void PosixSemaphoreConditionVariable::notify()
+{
+    sem_post(_semaphore);
+}
+
+bool PosixSemaphoreConditionVariable::wait()
+{
+    sem_wait(_semaphore);
+    return true;
+}
+
+/* The maximum number of condition variable instances depend on the
+ * number of rtp file descriptors enabled in the the xenomai kernel.
+ * It is set with CONFIG_XENO_OPT_PIPE_NRDEV or CONFIG_EVL_NR_XBUFS, pass the same value
+ * to twine when building for xenomai */
+
+constexpr size_t MAX_RT_COND_VARS = TWINE_MAX_RT_CONDITION_VARS;
+
+// Note, static variables are guaranteed to be zero initialized
+static std::array<bool, MAX_RT_COND_VARS> active_ids;
+static std::mutex mutex;
+
+int get_next_id()
+{
+    for (auto i = 0u; i < active_ids.size(); ++i)
+    {
+        if (active_ids[i] == false)
+        {
+            active_ids[i] = true;
+            return i;
+        }
+    }
+    throw std::runtime_error("Maximum number of RtConditionVariables reached");
+}
+
+void deregister_id(int id)
+{
+    assert(id < static_cast<int>(MAX_RT_COND_VARS));
+    std::unique_lock<std::mutex> lock(mutex);
+    active_ids[id] = false;
 }
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -104,37 +174,6 @@ private:
 
     std::array<pollfd, 2> _poll_targets;
 };
-
-/* The maximum number of condition variable instances depend on the
- * number of rtp file descriptors enabled in the the xenomai kernel.
- * It is set with CONFIG_XENO_OPT_PIPE_NRDEV, pass the same value
- * to twine when building for xenomai */
-
-constexpr size_t MAX_XENOMAI_DEVICES = TWINE_MAX_XENOMAI_RTP_DEVICES;
-
-// Note, static variables are guaranteed to be zero initialized
-static std::array<bool, MAX_XENOMAI_DEVICES> active_ids;
-static std::mutex mutex;
-
-int get_next_id()
-{
-    for (auto i = 0u; i < active_ids.size(); ++i)
-    {
-        if (active_ids[i] == false)
-        {
-            active_ids[i] = true;
-            return i;
-        }
-    }
-    throw std::runtime_error("Maximum number of RtConditionVariables reached");
-}
-
-void deregister_id(int id)
-{
-    assert(id < static_cast<int>(MAX_XENOMAI_DEVICES));
-    std::unique_lock<std::mutex> lock(mutex);
-    active_ids[id] = false;
-}
 
 XenomaiConditionVariable::XenomaiConditionVariable(int id) : _id(id)
 {
@@ -226,7 +265,87 @@ void XenomaiConditionVariable::_set_up_files()
     _poll_targets[1] = {.fd = _non_rt_file, .events = POLLIN, .revents = 0};
 }
 
-#endif
+#endif // TWINE_BUILD_WITH_XENOMAI
+
+#ifdef TWINE_BUILD_WITH_EVL
+
+using MsgType = uint8_t;
+constexpr size_t XBUF_SIZE = 1024;
+constexpr int INFINITE_POLL_TIME = -1;
+
+/**
+ * @brief Implementation using EVL xbuf mechanisms
+ */
+class EvlConditionVariable : public RtConditionVariable
+{
+public:
+    EvlConditionVariable(int id);
+
+    virtual ~EvlConditionVariable() override;
+
+    void notify() override;
+
+    bool wait() override;
+
+private:
+    int _xbuf_to_rt{0};
+    int _xbuf_to_nonrt{0};
+    int          _id{0};
+};
+
+EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
+{
+    _xbuf_to_rt = evl_create_xbuf(0, XBUF_SIZE, EVL_CLONE_PRIVATE, "twinecv-tort-buf-%d", _id);
+     if (_xbuf_to_rt < 0)
+     {
+        throw std::runtime_error(strerror(errno));
+     }
+
+    _xbuf_to_nonrt = evl_create_xbuf(XBUF_SIZE, 0, EVL_CLONE_PRIVATE, "twinecv-tononrt-buf-%d", _id);
+    if (_xbuf_to_rt < 0)
+    {
+        throw std::runtime_error(strerror(errno));
+    }
+}
+
+EvlConditionVariable::~EvlConditionVariable()
+{
+    close(_xbuf_to_rt);
+    close(_xbuf_to_nonrt);
+}
+
+void EvlConditionVariable::notify()
+{
+    MsgType data = 1;
+    if (!evl_is_inband())
+    {
+        oob_write(_xbuf_to_nonrt, &data, sizeof(data));
+    }
+    else
+    {
+        write(_xbuf_to_rt, &data, sizeof(data));
+    }
+}
+
+bool EvlConditionVariable::wait()
+{
+    MsgType buffer;
+    int len = 0;
+
+    if (!evl_is_inband())
+    {
+        len += oob_read(_xbuf_to_rt, &buffer, sizeof(buffer));
+    }
+    else
+    {
+        len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
+    }
+    return len > 0;
+}
+
+#endif // TWINE_BUILD_WITH_EVL
+
 }// namespace twine
 
 #endif //TWINE_CONDITION_VARIABLE_IMPLEMENTATION_H
+
