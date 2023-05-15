@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -14,7 +14,7 @@
 
 /**
  * @brief Worker pool implementation
- * @copyright 2018-2019 Modern Ancient Instruments Networked AB, dba Elk, Stockholm
+ * @copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
 #ifndef TWINE_WORKER_POOL_IMPLEMENTATION_H

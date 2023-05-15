@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk
+ * Copyright Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -10,6 +10,11 @@
  *
  * You should have received a copy of the GNU General Public License along with Twine.
  * If not, see http://www.gnu.org/licenses/ .
+ */
+
+/**
+ * @brief Twine library API definition
+ * @copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
 #ifndef TWINE_TWINE_H_

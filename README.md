@@ -3,7 +3,7 @@
 
 Support library for managing realtime threads and worker pools
 
-Copyright 2018-2021 Modern Ancient Instruments Networked AB, dba Elk, Stockholm, Sweden.
+Copyright Copyright 2017-2023 Elk Audio AB, Stockholm, Sweden.
 
 ## Usage
 To include twine in a CMake based project the lines below needs to be added to the projects CMake configuration. Further build options can be found in twine/CMakeLists.txt
@@ -30,5 +30,5 @@ On macOS, Apple CoreAudio is on by default - switching it off will significantly
 
 TWINE is licensed under the GNU General Public License v3 (“GPLv3”). Commercial licenses are available on request at tech@elk.audio.
 
-Copyright 2017-2022 Modern Ancient Instruments Networked AB, dba Elk, Stockholm, Sweden.
+Copyright Copyright 2017-2023 Elk Audio AB, Stockholm, Sweden.
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2023 Elk Audio AB
+ * Copyright 2017-2023 Elk Audio AB
  * Twine is free software: you can redistribute it and/or modify it under the terms
  * of the GNU General Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -15,7 +15,7 @@
 /**
  * @brief For Apple silicon, an additional API is exposed besides that for posix threading.
  *        This file collects tools for this Apple threading API.
- * @copyright 2017-2022 Elk Audio AB, Stockholm
+ * @copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
 #include "twine/twine.h"
