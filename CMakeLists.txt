@@ -116,8 +116,7 @@ function(add_xenomai_to_target target)
 endfunction()
 
 function(set_twine_target_properties target)
-    target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
-    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/include)
+    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR}/generated)
     target_compile_features(${target} PUBLIC cxx_std_17)
     target_compile_options(${target} PRIVATE -Wall -Wextra)
     set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
@@ -131,9 +130,8 @@ function(set_twine_target_properties target)
          set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
     target_link_libraries(${target} PRIVATE pthread ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
-    target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/include)
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
-    #set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
+    set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 endfunction()
 
 ####################
@@ -175,7 +173,7 @@ endif()
 #  Install  #
 #############
 
-
+# Create install target for library
 install(TARGETS twine
         EXPORT twineConfig
         ARCHIVE DESTINATION lib
@@ -183,12 +181,14 @@ install(TARGETS twine
         PUBLIC_HEADER DESTINATION include/twine
 )
 
-export(TARGETS
-       twine
-       NAMESPACE twine::
-       FILE "${CMAKE_CURRENT_BINARY_DIR}/twineConfig.cmake"
-       )
+# Generate install config file
+install(EXPORT twineConfig
+        FILE twineConfig.cmake
+        DESTINATION lib/cmake/twine
+        NAMESPACE twine::
+        )
 
+# Generate config version file
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
         ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
@@ -196,12 +196,7 @@ write_basic_package_version_file(
         COMPATIBILITY SameMinorVersion
         )
 
-install(EXPORT
-        twineConfig
-        DESTINATION lib/cmake/twine
-        NAMESPACE twine::
-        )
-
+# Install config version file
 install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
         DESTINATION lib/cmake/twine
