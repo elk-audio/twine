@@ -35,8 +35,6 @@ typedef void* os_workgroup_t;
 
 namespace apple {
 
-std::string status_to_string(AppleThreadingStatus status);
-
 // CoreAudio is needed to fetch the thread workgroup for the audio device specified.
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
 

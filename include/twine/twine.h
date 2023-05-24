@@ -59,6 +59,8 @@ enum class AppleThreadingStatus
     EMPTY = 15
 };
 
+std::string status_to_string(AppleThreadingStatus status);
+
 typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
 
 /**
