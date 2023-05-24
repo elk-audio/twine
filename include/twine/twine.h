@@ -221,9 +221,6 @@ protected:
     WorkerPool() = default;
 };
 
-// WIP: temporarily disabling condition variables for EVL porting
-#ifndef TWINE_ENABLE_CONDITION_VARIABLE
-
 /**
  * @brief Condition variable designed to signal a lower priority non-realtime thread
  *        from a realtime thread without causing mode switches or interfering with
@@ -259,8 +256,6 @@ public:
 protected:
     RtConditionVariable() = default;
 };
-
-#endif
 
 }// namespace twine
 
