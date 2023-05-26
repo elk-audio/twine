@@ -58,22 +58,22 @@ int CobaltThreadHelper::thread_join(pthread_t thread, void** return_var)
 
 int CobaltThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name)
 {
-    return __cobalt_sem_init(to_posix_sem(semaphore), 0, 0);
+    return __cobalt_sem_init(to_cobalt_sem(semaphore), 0, 0);
 }
 
 int CobaltThreadHelper::semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* semaphore_name)
 {
-    return __cobalt_sem_destroy(to_posix_sem(semaphore));
+    return __cobalt_sem_destroy(to_cobalt_sem(semaphore));
 }
 
 int CobaltThreadHelper::semaphore_wait(BaseSemaphore* semaphore)
 {
-    return __cobalt_sem_wait(to_posix_sem(semaphore));
+    return __cobalt_sem_wait(to_cobalt_sem(semaphore));
 }
 
 int CobaltThreadHelper::semaphore_signal(BaseSemaphore* semaphore)
 {
-    return __cobalt_sem_post(to_posix_sem(semaphore));
+    return __cobalt_sem_post(to_cobalt_sem(semaphore));
 }
 
 

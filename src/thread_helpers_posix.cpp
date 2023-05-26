@@ -71,8 +71,8 @@ int PosixThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused
 {
     sem_unlink(name);
     auto psemaphore = to_posix_sem(semaphore);
-    psemaphore = sem_open(name, O_CREAT, 0, 0);
-    if (psemaphore == SEM_FAILED)
+    *psemaphore = sem_open(name, O_CREAT, 0, 0);
+    if (*psemaphore == SEM_FAILED)
     {
         return errno;
     }
@@ -82,18 +82,18 @@ int PosixThreadHelper::semaphore_create(BaseSemaphore* semaphore, [[maybe_unused
 int PosixThreadHelper::semaphore_destroy(BaseSemaphore* semaphore, [[maybe_unused]] const char* name)
 {
     sem_unlink(name);
-    sem_close(to_posix_sem(semaphore));
+    sem_close(*to_posix_sem(semaphore));
     return 0;
 }
 
 int PosixThreadHelper::semaphore_wait(BaseSemaphore* semaphore)
 {
-    return sem_wait(to_posix_sem(semaphore));
+    return sem_wait(*to_posix_sem(semaphore));
 }
 
 int PosixThreadHelper::semaphore_signal(BaseSemaphore* semaphore)
 {
-    return sem_post(to_posix_sem(semaphore));
+    return sem_post(*to_posix_sem(semaphore));
 }
 
 
