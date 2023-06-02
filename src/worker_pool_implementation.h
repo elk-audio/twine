@@ -104,8 +104,8 @@ public:
 #ifdef TWINE_BUILD_WITH_XENOMAI
             _thread_helper = new CobaltThreadHelper();
 
-            _semaphores[0] = new PosixSemaphore();
-            _semaphores[1] = new PosixSemaphore();
+            _semaphores[0] = new CobaltSemaphore();
+            _semaphores[1] = new CobaltSemaphore();
 
             _calling_mutex = new PosixMutex();
 
