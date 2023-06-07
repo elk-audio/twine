@@ -117,7 +117,7 @@ endfunction()
 
 function(set_twine_target_properties target)
     target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
-    target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+    target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
     target_compile_features(${target} PUBLIC cxx_std_17)
     target_compile_options(${target} PRIVATE -Wall -Wextra)
     set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
