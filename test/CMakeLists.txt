@@ -60,7 +60,7 @@ add_test(unit_tests unit_tests)
 
 ### Custom target for running the tests
 
-add_custom_target(run_tests ALL COMMAND "./unit_tests")
+add_custom_target(run_tests ALL COMMAND "$<TARGET_FILE:unit_tests>")
 add_dependencies(run_tests unit_tests)
 
 # Stress test is not built per default
