@@ -29,6 +29,7 @@
 #include <cerrno>
 #include <stdexcept>
 #include <string>
+#include <fstream>
 
 #ifdef TWINE_BUILD_WITH_EVL
     #include <unistd.h>
@@ -42,11 +43,18 @@
 #include "twine_internal.h"
 
 namespace twine {
+constexpr auto ISOLATED_CPUS_FILE = "/sys/devices/system/cpu/isolated";
 
 template <ThreadType type>
 class WorkerPoolImpl;
 
 void set_flush_denormals_to_zero();
+
+struct CoreInfo
+{
+    int id;
+    int workers;
+};
 
 inline void enable_break_on_mode_sw()
 {
@@ -73,6 +81,64 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
         default:
             return WorkerPoolStatus::ERROR;
     }
+}
+
+inline std::vector<CoreInfo> build_core_list(int start_core, int cores)
+{
+    std::vector<CoreInfo> list;
+    for (int i = start_core; i < cores + start_core; i++)
+    {
+        list.push_back({i, 0});
+    }
+    return list;
+}
+
+/**
+ * @brief Reads the configured isolated cores from a given file
+ * @param str a string to  read the configuration from
+ * @return A vector of core ids. Empty if the file doesnt exist or there are no isolated cores
+ */
+inline std::vector<int> read_isolated_cores(const std::string& str)
+{
+    try
+    {
+        auto sep = str.find('-');
+        if (sep < std::string::npos)
+        {
+            int first = std::stoi(str.substr(0, sep));
+            int last = std::stoi(str.substr(sep + 1));
+            std::vector<int> list;
+            for (int i = first; i <= last; ++i)
+            {
+                list.push_back(i);
+            }
+            return list;
+        }
+    }
+    catch (std::exception& e) {/*pass*/}
+    return {};
+}
+
+inline std::optional<std::vector<CoreInfo>> get_isolated_cpus(const std::string& cpu_file, int cores)
+{
+    std::fstream file;
+    file.open(cpu_file.c_str(), std::ios_base::in);
+    if (file.is_open())
+    {
+        std::string contents;
+        std::getline(file, contents);
+        auto info = read_isolated_cores(contents);
+        if (info.size() > 0)
+        {
+            std::vector<CoreInfo> list;
+            for (int i = 0; i < std::min(static_cast<int>(info.size()), cores); ++i)
+            {
+                list.push_back({info.at(i), 0});
+            }
+            return list;
+        }
+    }
+    return std::nullopt;
 }
 
 /**
@@ -523,12 +589,20 @@ public:
     explicit WorkerPoolImpl(int cores,
                             [[maybe_unused]] apple::AppleMultiThreadData apple_data,
                             bool disable_denormals,
-                            bool break_on_mode_sw) : _no_cores(cores),
-                                                     _cores_usage(cores, 0),
-                                                     _disable_denormals(disable_denormals),
+                            bool break_on_mode_sw) : _disable_denormals(disable_denormals),
                                                      _break_on_mode_sw(break_on_mode_sw),
                                                      _apple_data(apple_data)
-    {}
+    {
+#ifdef LINUX // TWINE_BUILD_WITH_EVL
+        // EVL supports isolated cpus, if that enabled we need to assign workers only to those cores
+        // If isolated cpus is not enabled we simply start counting from 0
+        _cores = get_isolated_cpus(ISOLATED_CPUS_FILE, cores).value_or(build_core_list(0, cores));
+#else
+        _cores = build_core_list(0, cores);
+
+#endif
+
+    }
 
     ~WorkerPoolImpl()
     {
@@ -542,30 +616,22 @@ public:
                                                                         int sched_priority = DEFAULT_SCHED_PRIORITY,
                                                                         std::optional<int> cpu_id = std::nullopt) override
     {
-        int core = 0;
+        std::vector<CoreInfo>::iterator core_info;
         if (cpu_id.has_value())
         {
-            core = cpu_id.value();
-            if ( (core < 0) || (core >= _no_cores) )
+            auto core = std::find_if(_cores.begin(), _cores.end(), [&](auto& i){return i.id == cpu_id.value();});
+            if (core == _cores.end())
             {
                 return {WorkerPoolStatus::INVALID_ARGUMENTS, apple::AppleThreadingStatus::EMPTY};
             }
+            core_info = core;
         }
         else
         {
             // If no core is specified, pick the first core with the least usage
-            int min_idx = _no_cores - 1;
-            int min_usage = _cores_usage[min_idx];
-            for (int n = _no_cores-1; n >= 0; n--)
-            {
-                int cur_usage = _cores_usage[n];
-                if (cur_usage <= min_usage)
-                {
-                    min_usage = cur_usage;
-                    min_idx = n;
-                }
-            }
-            core = min_idx;
+            auto core = std::min_element(_cores.begin(), _cores.end(),
+                                         [](auto& lhs, auto& rhs){return lhs.workers < rhs.workers;});
+            core_info = core;
         }
 
         auto worker = std::make_unique<WorkerThread<type>>(_barrier,
@@ -577,9 +643,9 @@ public:
                                                            _break_on_mode_sw);
         _barrier.set_no_threads(_no_workers + 1);
 
-        _cores_usage[core]++;
+        core_info->workers++;
 
-        auto res = errno_to_worker_status(worker->run(sched_priority, core));
+        auto res = errno_to_worker_status(worker->run(sched_priority, core_info->id));
         if (res == WorkerPoolStatus::OK)
         {
             // Wait until the thread is idle to avoid synchronisation issues
@@ -600,7 +666,7 @@ public:
 
                 _no_workers--;
                 _barrier.set_no_threads(_no_workers);
-                _cores_usage[core]--;
+                core_info->workers--;
 
                 _workers.pop_back();
 
@@ -633,8 +699,7 @@ public:
 private:
     std::atomic_bool            _running{true};
     int                         _no_workers{0};
-    int                         _no_cores;
-    std::vector<int>            _cores_usage;
+    std::vector<CoreInfo>       _cores;
     bool                        _disable_denormals;
     bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
