@@ -119,6 +119,14 @@ inline std::vector<int> read_isolated_cores(const std::string& str)
     return {};
 }
 
+/**
+ * @brief Read the isolated cpus from a file path and populates a vector of CoreInfo objects from it
+ * @param cpu_file The file to read cpu data from
+ * @param cores The maximum number of cores to use. If that is less than the number of isolated cpu cores
+ *              only the first cores will be used
+ * @return A std::vector<CoreInfo> with the core ids from the file or std::nullopt if the file is empty
+ *         or non-existent
+ */
 inline std::optional<std::vector<CoreInfo>> get_isolated_cpus(const std::string& cpu_file, int cores)
 {
     std::fstream file;
@@ -593,7 +601,7 @@ public:
                                                      _break_on_mode_sw(break_on_mode_sw),
                                                      _apple_data(apple_data)
     {
-#ifdef LINUX // TWINE_BUILD_WITH_EVL
+#ifdef TWINE_BUILD_WITH_EVL
         // EVL supports isolated cpus, if that enabled we need to assign workers only to those cores
         // If isolated cpus is not enabled we simply start counting from 0
         _cores = get_isolated_cpus(ISOLATED_CPUS_FILE, cores).value_or(build_core_list(0, cores));
