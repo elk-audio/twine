@@ -56,13 +56,6 @@ struct CoreInfo
     int workers;
 };
 
-inline void enable_break_on_mode_sw()
-{
-#ifdef TWINE_BUILD_WITH_XENOMAI
-    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
-#endif
-}
-
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
     switch (error)
@@ -485,20 +478,19 @@ private:
 #endif
         }
 
+#ifdef TWINE_BUILD_WITH_EVL
         if constexpr (type == ThreadType::EVL)
         {
-#ifdef TWINE_BUILD_WITH_EVL
-	        auto tfd = evl_attach_self("/twine-worker-%d", gettid());
+            auto tfd = evl_attach_self("/twine-worker-%d", gettid());
             if (_break_on_mode_sw)
             {
                 evl_set_thread_mode(tfd, T_WOSS, NULL);
             }
+        }
 #endif
 #ifdef TWINE_APPLE_THREADING
         _init_apple_thread();
 #endif
-        }
-
         while (true)
         {
             _barrier.wait();

@@ -55,6 +55,9 @@ if (${TWINE_WITH_XENOMAI})
     target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
     target_link_libraries(unit_tests PRIVATE ${COBALT_LIB})
 endif()
+if (${TWINE_WITH_EVL})
+    target_link_libraries(unit_tests PRIVATE evl)
+endif()
 
 add_test(unit_tests unit_tests)
 
