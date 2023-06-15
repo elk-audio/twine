@@ -45,7 +45,7 @@
 
 namespace twine {
 
-constexpr int64_t NS_TO_S = 1'000'000'000;
+[[maybe_unused]] constexpr int64_t NS_TO_S = 1'000'000'000;
 
 thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
