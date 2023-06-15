@@ -602,9 +602,16 @@ public:
                                                      _apple_data(apple_data)
     {
 #ifdef TWINE_BUILD_WITH_EVL
-        // EVL supports isolated cpus, if that enabled we need to assign workers only to those cores
+        // EVL supports isolated cpus, if that is enabled we need to assign workers only to those cores
         // If isolated cpus is not enabled we simply start counting from 0
-        _cores = get_isolated_cpus(ISOLATED_CPUS_FILE, cores).value_or(build_core_list(0, cores));
+        if constexpr (type == ThreadType::EVL)
+        {
+            _cores = get_isolated_cpus(ISOLATED_CPUS_FILE, cores).value_or(build_core_list(0, cores));
+        }
+        else
+        {
+            _cores = build_core_list(0, cores);
+        }
 #else
         _cores = build_core_list(0, cores);
 
