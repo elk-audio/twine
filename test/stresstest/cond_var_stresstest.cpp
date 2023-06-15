@@ -150,9 +150,6 @@ void print_iterations(int64_t iter, bool xenomai)
 
 void* run_stress_test(void* data)
 {
-#ifdef TWINE_BUILD_WITH_EVL
-    evl_attach_self("/condvar_stress_test_main");
-#endif
     auto [cond_vars, frequencies, counts, iters, xenomai, print_timings] =
                *(reinterpret_cast<std::tuple<std::vector<std::unique_ptr<twine::RtConditionVariable>>*,
                                   std::vector<int>*,
@@ -161,6 +158,12 @@ void* run_stress_test(void* data)
                                   bool,
                                   bool>*>(data));
 
+#ifdef TWINE_BUILD_WITH_EVL
+    if (xenomai)
+    {
+        evl_attach_self("/condvar_stress_test_main");
+    }
+#endif
     for (int64_t iter = 0; iter < iters; ++iter)
     {
         for (int i = 0; i < static_cast<int>(cond_vars->size()); ++i)
