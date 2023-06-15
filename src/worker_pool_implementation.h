@@ -58,8 +58,9 @@ struct CoreInfo
 
 inline void enable_break_on_mode_sw()
 {
-    // TODO - under Cobalt only?
-    //pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#ifdef TWINE_BUILD_WITH_XENOMAI
+    pthread_setmode_np(0, PTHREAD_WARNSW, 0);
+#endif
 }
 
 inline WorkerPoolStatus errno_to_worker_status(int error)
@@ -332,18 +333,6 @@ public:
     }
 
 private:
-    /*void _swap_semaphores()
-    {
-        if (_active_sem == _semaphores[0])
-        {
-            _active_sem = _semaphores[1];
-        }
-        else
-        {
-            _active_sem = _semaphores[0];
-        }
-    }*/
-    // TODO - more efficient?
     void _swap_semaphores()
     {
         _active_sem_idx = 1 - _active_sem_idx;
