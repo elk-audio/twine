@@ -1,8 +1,9 @@
 ## 0.4.0
 New Features:
-* Full EVL support
+* Full EVL support including isolated cpus
 * Support for MacOS thread workgroups and real-time settings
 * Posix version of RtConditionVariable uses semaphores for improved performance
+* CMake install package
 
 Fixes:
 * Fix for UTF8 device name on MacOS
