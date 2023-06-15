@@ -34,6 +34,39 @@ void test_function(std::atomic_bool& running, std::atomic_bool& flag, BarrierWit
     }
 }
 
+TEST (UtilityFunctionTest, TestGetIsolatedCpus)
+{
+    auto res = read_isolated_cores("0-3");
+    ASSERT_EQ(4, res.size());
+    EXPECT_EQ(0, res.at(0));
+    EXPECT_EQ(1, res.at(1));
+    EXPECT_EQ(2, res.at(2));
+    EXPECT_EQ(3, res.at(3));
+
+    res = read_isolated_cores("2-3");
+    ASSERT_EQ(2, res.size());
+    EXPECT_EQ(2, res.at(0));
+    EXPECT_EQ(3, res.at(1));
+
+    res = read_isolated_cores("23");
+    EXPECT_TRUE(res.empty());
+
+    res = read_isolated_cores("");
+    EXPECT_TRUE(res.empty());
+
+    res = read_isolated_cores("4-");
+    EXPECT_TRUE(res.empty());
+}
+
+TEST (UtilityFunctionTest, TestBuildCoreList)
+{
+    auto list = build_core_list(2, 3);
+    ASSERT_EQ(3, list.size());
+    EXPECT_EQ(2, list.at(0).id);
+    EXPECT_EQ(3, list.at(1).id);
+    EXPECT_EQ(4, list.at(2).id);
+}
+
 TEST (BarrierTest, TestBarrierWithTrigger)
 {
     std::atomic_bool a = false;
