@@ -45,7 +45,7 @@ add_executable(unit_tests ${TEST_FILES})
 
 target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS})
 target_compile_options(unit_tests PRIVATE -Wall -Wextra)
-target_link_libraries(unit_tests "${TEST_LINK_LIBRARIES}")
+target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}")
 target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 
 target_compile_features(unit_tests PRIVATE cxx_std_17)
@@ -53,14 +53,17 @@ target_compile_features(unit_tests PRIVATE cxx_std_17)
 target_compile_options(unit_tests PRIVATE -Wall -Wextra)
 if (${TWINE_WITH_XENOMAI})
     target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
-    target_link_libraries(unit_tests ${COBALT_LIB})
+    target_link_libraries(unit_tests PRIVATE ${COBALT_LIB})
+endif()
+if (${TWINE_WITH_EVL})
+    target_link_libraries(unit_tests PRIVATE evl)
 endif()
 
 add_test(unit_tests unit_tests)
 
 ### Custom target for running the tests
 
-add_custom_target(run_tests ALL COMMAND "./unit_tests")
+add_custom_target(run_tests ALL COMMAND "$<TARGET_FILE:unit_tests>")
 add_dependencies(run_tests unit_tests)
 
 # Stress test is not built per default

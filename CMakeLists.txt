@@ -117,7 +117,7 @@ endfunction()
 
 function(set_twine_target_properties target)
     target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
-    target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
+    target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
     target_compile_features(${target} PUBLIC cxx_std_17)
     target_compile_options(${target} PRIVATE -Wall -Wextra)
     set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
@@ -131,7 +131,6 @@ function(set_twine_target_properties target)
          set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
     target_link_libraries(${target} PRIVATE pthread ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
-    target_include_directories(${target} PUBLIC ${PROJECT_SOURCE_DIR}/include)
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
     set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 endfunction()
@@ -161,6 +160,7 @@ add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)
 add_library(twine SHARED ${SOURCE_FILES})
 set_twine_target_properties(twine)
+add_library(twine::twine ALIAS twine)
 
 #######################
 #  Unit test targets  #
@@ -174,10 +174,31 @@ endif()
 #  Install  #
 #############
 
-
+# Create install target for library
 install(TARGETS twine
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/twine
+        EXPORT twineConfig
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        PUBLIC_HEADER DESTINATION include/twine
 )
 
+# Generate install config file
+install(EXPORT twineConfig
+        FILE twineConfig.cmake
+        DESTINATION lib/cmake/twine
+        NAMESPACE twine::
+        )
+
+# Generate config version file
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
+        VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
+        COMPATIBILITY SameMinorVersion
+        )
+
+# Install config version file
+install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
+        DESTINATION lib/cmake/twine
+        )

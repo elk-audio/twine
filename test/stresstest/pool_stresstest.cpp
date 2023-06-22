@@ -385,6 +385,7 @@ int main(int argc, char **argv)
     apple_data.device_name = device_name;
 #endif
 
+    std::cout << "Running with " << workers << " workers on " << cores << " cores" << std::endl;
     auto worker_pool = twine::WorkerPool::create_worker_pool(cores, apple_data);
 
     std::random_device rd;

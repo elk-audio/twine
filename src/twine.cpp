@@ -41,14 +41,11 @@
 #include "twine_internal.h"
 #include "twine_version.h"
 #include "worker_pool_implementation.h"
-
-#ifndef TWINE_ENABLE_CONDITION_VARIABLE
-    #include "condition_variable_implementation.h"
-#endif
+#include "condition_variable_implementation.h"
 
 namespace twine {
 
-constexpr int64_t NS_TO_S = 1'000'000'000;
+[[maybe_unused]] constexpr int64_t NS_TO_S = 1'000'000'000;
 
 thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
@@ -162,7 +159,6 @@ std::string to_error_string(twine::WorkerPoolStatus status)
     }
 }
 
-#ifndef TWINE_ENABLE_CONDITION_VARIABLE
 std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -181,6 +177,5 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
 #endif
     return std::make_unique<PosixSemaphoreConditionVariable>();
 }
-#endif
 
 } // twine

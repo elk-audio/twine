@@ -152,7 +152,7 @@ struct PosixCondVar : BaseCondVar
 
 struct PosixSemaphore : BaseSemaphore
 {
-    sem_t semaphore;
+    sem_t* semaphore;
 };
 
 inline pthread_mutex_t* to_posix_mutex(BaseMutex* mutex)
@@ -165,13 +165,17 @@ inline pthread_cond_t* to_posix_cond(BaseCondVar* cond_var)
     return &static_cast<PosixCondVar*>(cond_var)->cond_var;
 }
 
-inline sem_t* to_posix_sem(BaseSemaphore* semaphore)
+inline sem_t** to_posix_sem(BaseSemaphore* semaphore)
 {
     return &static_cast<PosixSemaphore*>(semaphore)->semaphore;
 }
 
-
 #ifdef TWINE_BUILD_WITH_XENOMAI
+
+struct CobaltSemaphore : BaseSemaphore
+{
+    sem_t semaphore;
+};
 
 class CobaltThreadHelper : public BaseThreadHelper
 {
@@ -207,6 +211,11 @@ public:
 
     int semaphore_signal(BaseSemaphore* semaphore) override;
 };
+
+inline sem_t* to_cobalt_sem(BaseSemaphore* semaphore)
+{
+    return &static_cast<CobaltSemaphore*>(semaphore)->semaphore;
+}
 
 #endif // TWINE_BUILD_WITH_XENOMAI
 

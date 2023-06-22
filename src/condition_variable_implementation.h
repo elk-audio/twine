@@ -65,7 +65,7 @@ private:
 PosixSemaphoreConditionVariable::PosixSemaphoreConditionVariable() : _semaphore(nullptr)
 {
     int retries = MAX_RETRIES;
-    std::srand(std::time(nullptr));
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
     while (--retries > 0)
     {
