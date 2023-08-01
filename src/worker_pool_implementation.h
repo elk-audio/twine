@@ -437,7 +437,7 @@ public:
         pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
         pthread_attr_setschedparam(&task_attributes, &rt_params);
         auto res = 0;
-#ifndef __APPLE__
+#if !defined __APPLE__ && !defined _WIN32 
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
