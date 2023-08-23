@@ -412,11 +412,7 @@ public:
 
     ~WorkerThread()
     {
-        if (_thread_handle != 0)
-        {
-            _thread_helper->thread_join(_thread_handle, nullptr);
-        }
-
+        _thread_helper->thread_join(_thread_handle, nullptr);
         delete _thread_helper;
     }
 
