@@ -173,6 +173,7 @@ set_twine_target_properties(twine_static)
 add_library(twine SHARED ${SOURCE_FILES})
 set_twine_target_properties(twine)
 add_library(twine::twine ALIAS twine)
+add_library(twine::twine_static ALIAS twine_static)
 
 #######################
 #  Unit test targets  #
