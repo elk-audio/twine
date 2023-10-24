@@ -40,6 +40,41 @@
 namespace twine {
 
 /**
+ * @brief Implementation with regular c++ std library constructs for
+ *        use in a regular linux context.
+ */
+class PosixConditionVariable : public RtConditionVariable
+{
+public:
+    ~PosixConditionVariable() override = default;
+
+    void notify() override;
+
+    bool wait() override;
+
+private:
+    bool                    _flag{false};
+    std::mutex              _mutex;
+    std::condition_variable _cond_var;
+};
+
+void PosixConditionVariable::notify()
+{
+    std::unique_lock<std::mutex> lock(_mutex);
+    _flag = true;
+    _cond_var.notify_one();
+}
+
+bool PosixConditionVariable::wait()
+{
+    std::unique_lock<std::mutex> lock(_mutex);
+    _cond_var.wait(lock);
+    bool notified = _flag;
+    _flag = false;
+    return notified;
+}
+
+/**
  * @brief Implementation using posix semaphores for use in regular linux and MacOs
  */
 
