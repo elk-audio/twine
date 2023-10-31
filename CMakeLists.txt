@@ -166,9 +166,14 @@ endif()
 #   add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
 # but it doesn't play nicely with XCode builds, so we just define both
 
+if(MSVC)
+    # Define .def file to export dll symbols
+    set(TWINE_DEF_FILE twine.def)
+endif()
+
 add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)
-add_library(twine SHARED ${SOURCE_FILES})
+add_library(twine SHARED ${SOURCE_FILES} ${TWINE_DEF_FILE})
 set_twine_target_properties(twine)
 add_library(twine::twine ALIAS twine)
 add_library(twine::twine_static ALIAS twine_static)
