@@ -20,12 +20,6 @@
 #ifndef TWINE_TWINE_INTERNAL_H
 #define TWINE_TWINE_INTERNAL_H
 
-#ifdef _MSC_VER
-    #define DLL_EXPORT __declspec(dllexport)
-#else
-    #define DLL_EXPORT
-#endif
-
 namespace twine {
 /**
  * @brief Signal to twine that Worker Pools should use the xenomai thread api and
@@ -38,13 +32,22 @@ void init_xenomai();
 /**
  * @brief Used to signal that the current thread is a realtime thread
  */
-class DLL_EXPORT ThreadRtFlag
+class ThreadRtFlag
 {
 public:
-    ThreadRtFlag();
-    ~ThreadRtFlag();
+    ThreadRtFlag()
+    {
+        _instance_counter += 1;
+    }
+    ~ThreadRtFlag()
+    {
+        _instance_counter -= 1;
+    }
 
-    static bool is_realtime();
+    static bool is_realtime()
+    {
+        return _instance_counter > 0;
+    }
 
 private:
     static thread_local int _instance_counter;

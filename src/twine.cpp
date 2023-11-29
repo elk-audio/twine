@@ -59,20 +59,6 @@ static XenomaiRtFlag running_xenomai_realtime;
 #define _STRINGIZE(X) #X
 #define STRINGIZE(X) _STRINGIZE(X)
 
-ThreadRtFlag::ThreadRtFlag()
-{
-    _instance_counter += 1;
-}
-ThreadRtFlag::~ThreadRtFlag()
-{
-    _instance_counter -= 1;
-}
-
-bool ThreadRtFlag::is_realtime()
-{
-    return _instance_counter > 0;
-}
-
 VersionInfo twine_version()
 {
     return {TWINE__VERSION_MAJ, TWINE__VERSION_MIN, TWINE__VERSION_REV};

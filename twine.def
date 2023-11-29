@@ -8,3 +8,4 @@ EXPORTS
   current_rt_time
   create_worker_pool
   create_rt_condition_variable
+  _instance_counter
