@@ -1,8 +1,13 @@
 #include "thread_helpers.h"
 
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <elk-warning-suppressor/warning_suppressor.hpp>
+
+ELK_PUSH_WARNING
+
+ELK_DISABLE_UNUSED_PARAMETER
 #include <cobalt/pthread.h>
 #include <cobalt/semaphore.h>
+ELK_POP_WARNING
 
 namespace twine {
 

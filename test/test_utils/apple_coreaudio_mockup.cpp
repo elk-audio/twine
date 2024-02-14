@@ -1,9 +1,9 @@
-//#include <CoreAudio/AudioHardware.h>
+#include <elk-warning-suppressor/warning_suppressor.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnullability-completeness"// Ignore Apple nonsense
+ELK_PUSH_WARNING
+ELK_DISABLE_NULLABILITY_COMPLETENESS
 #include "apple_coreaudio_mockup.h"
-#pragma clang diagnostic pop
+ELK_POP_WARNING
 
 AppleAudioHardwareMockup* AppleAudioHardwareMockup::instance = nullptr;
 

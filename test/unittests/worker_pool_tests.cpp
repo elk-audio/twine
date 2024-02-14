@@ -12,7 +12,7 @@ ELK_PUSH_WARNING
 ELK_DISABLE_KEYWORD_MACRO
 #define private public
 
-ELK_DISABLE_NULLABILITY_COMPLETENESS // Ignore Apple nonsense
+ELK_DISABLE_NULLABILITY_COMPLETENESS
 
 #include "../test_utils/apple_mock_lambdas.h"
 

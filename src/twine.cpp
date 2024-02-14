@@ -25,9 +25,14 @@
 #endif
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <elk-warning-suppressor/warning_suppressor.hpp>
+
+ELK_PUSH_WARNING
+
+ELK_DISABLE_UNUSED_PARAMETER
     #include <cobalt/stdio.h>
-    #pragma GCC diagnostic pop
+ELK_POP_WARNING
+
 #elif TWINE_BUILD_WITH_EVL
     #include <evl/proxy.h>
     #include <evl/clock.h>
