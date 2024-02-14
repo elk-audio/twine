@@ -1,16 +1,18 @@
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnullability-completeness"// Ignore Apple nonsense
-
-#pragma clang diagnostic pop
-
 #include <thread>
 #include <functional>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <elk-warning-suppressor/warning_suppressor.hpp>
+
+ELK_PUSH_WARNING
+
+ELK_DISABLE_KEYWORD_MACRO
 #define private public
+
+ELK_DISABLE_NULLABILITY_COMPLETENESS // Ignore Apple nonsense
 
 #include "../test_utils/apple_mock_lambdas.h"
 
@@ -23,7 +25,12 @@ using ::testing::Return;
 
 using namespace twine;
 
-constexpr int N_TEST_WORKERS = 4;
+namespace
+{
+  constexpr int N_TEST_WORKERS = 4;
+  constexpr int TEST_AUDIO_CHUNK_SIZE = 64;
+  constexpr int TEST_SAMPLE_RATE = 48000;
+}
 
 void test_function(std::atomic_bool& running, std::atomic_bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))
 {
@@ -141,6 +148,9 @@ void worker_function(void* data)
 
 TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 {
+  _module_under_test._apple_data.chunk_size = TEST_AUDIO_CHUNK_SIZE;
+  _module_under_test._apple_data.current_sample_rate = TEST_SAMPLE_RATE;
+
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     MockLambdas mock_lambdas(_test_data);
     workgroup_repeated_success_expectations(_mock, mock_lambdas);
@@ -494,3 +504,5 @@ TEST_F(AppleThreadingTest, FunctionalityFailureTest)
 
 
 #endif
+
+ELK_POP_WARNING

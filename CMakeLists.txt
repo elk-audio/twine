@@ -6,11 +6,13 @@ set(TWINE_VERSION_MINOR 4)
 set(TWINE_VERSION_REVISION 0)
 
 project(twine
-    DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
-    HOMEPAGE_URL "https://github.com/elk-audio/twine"
-    LANGUAGES CXX
-    VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
+        DESCRIPTION "Thread and Worker Interface for Elk Audio OS"
+        HOMEPAGE_URL "https://github.com/elk-audio/twine"
+        LANGUAGES CXX
+        VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
 )
+
+add_subdirectory(elk-warning-suppressor)
 
 ###########################
 #  Build and link options #
@@ -105,8 +107,8 @@ function(add_xenomai_to_target target)
     set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
 
     set(XENOMAI_INCLUDE_DIRS
-        ${XENOMAI_BASE_DIR}/include
-        ${XENOMAI_BASE_DIR}/include/cobalt
+            ${XENOMAI_BASE_DIR}/include
+            ${XENOMAI_BASE_DIR}/include/cobalt
     )
 
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
@@ -126,11 +128,11 @@ function(set_twine_target_properties target)
         add_xenomai_to_target(${target})
     endif()
     if (${TWINE_WITH_EVL})
-         message("Building ${target} with EVL")
-         target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
-         set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
+        message("Building ${target} with EVL")
+        target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
+        set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
-    target_link_libraries(${target} PRIVATE pthread ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
+    target_link_libraries(${target} PRIVATE pthread ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES} elk::warningSuppressor)
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
     set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 endfunction()
@@ -140,8 +142,8 @@ endfunction()
 ####################
 
 set(SOURCE_FILES src/twine.cpp
-                 src/thread_helpers_posix.cpp
-                 src/apple_threading.cpp)
+        src/thread_helpers_posix.cpp
+        src/apple_threading.cpp)
 
 if (${TWINE_WITH_XENOMAI})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
@@ -187,7 +189,7 @@ install(EXPORT twineConfig
         FILE twineConfig.cmake
         DESTINATION lib/cmake/twine
         NAMESPACE twine::
-        )
+)
 
 # Generate config version file
 include(CMakePackageConfigHelpers)
@@ -195,10 +197,10 @@ write_basic_package_version_file(
         ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
         VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
         COMPATIBILITY SameMinorVersion
-        )
+)
 
 # Install config version file
 install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/twineConfigVersion.cmake
         DESTINATION lib/cmake/twine
-        )
+)
