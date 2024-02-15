@@ -148,10 +148,10 @@ void worker_function(void* data)
 
 TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 {
-  _module_under_test._apple_data.chunk_size = TEST_AUDIO_CHUNK_SIZE;
-  _module_under_test._apple_data.current_sample_rate = TEST_SAMPLE_RATE;
-
 #ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+    _module_under_test._apple_data.chunk_size = TEST_AUDIO_CHUNK_SIZE;
+    _module_under_test._apple_data.current_sample_rate = TEST_SAMPLE_RATE;
+
     MockLambdas mock_lambdas(_test_data);
     workgroup_repeated_success_expectations(_mock, mock_lambdas);
 
