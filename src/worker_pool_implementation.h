@@ -600,7 +600,7 @@ public:
 
     }
 
-    ~WorkerPoolImpl()
+    ~WorkerPoolImpl() override
     {
         _barrier.wait_for_all();
         _running.store(false);

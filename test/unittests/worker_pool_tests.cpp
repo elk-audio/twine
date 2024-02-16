@@ -5,7 +5,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <elk-warning-suppressor/warning_suppressor.hpp>
+#include "elk-warning-suppressor/warning_suppressor.hpp"
 
 ELK_PUSH_WARNING
 
@@ -148,15 +148,18 @@ void worker_function(void* data)
 
 TEST_F(PthreadWorkerPoolTest, FunctionalityTest)
 {
-#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
+#ifdef TWINE_APPLE_THREADING
     _module_under_test._apple_data.chunk_size = TEST_AUDIO_CHUNK_SIZE;
     _module_under_test._apple_data.current_sample_rate = TEST_SAMPLE_RATE;
 
+#ifdef TWINE_BUILD_WITH_APPLE_COREAUDIO
     MockLambdas mock_lambdas(_test_data);
     workgroup_repeated_success_expectations(_mock, mock_lambdas);
 
     EXPECT_CALL(_mock, os_workgroup_join).WillRepeatedly(Return(0)); // 0 for success
     EXPECT_CALL(_mock, pthread_mach_thread_np).WillRepeatedly(Return(true));
+#endif
+
 #endif
 
     auto res = _module_under_test.add_worker(worker_function, &a);

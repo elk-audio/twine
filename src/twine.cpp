@@ -25,7 +25,7 @@
 #endif
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
-#include <elk-warning-suppressor/warning_suppressor.hpp>
+#include "elk-warning-suppressor/warning_suppressor.hpp"
 
 ELK_PUSH_WARNING
 
