@@ -107,8 +107,8 @@ function(add_xenomai_to_target target)
     set(XENOMAI_C_FLAGS "-D_GNU_SOURCE -D_REENTRANT -D__COBALT__ -D__COBALT_WRAP__")
 
     set(XENOMAI_INCLUDE_DIRS
-            ${XENOMAI_BASE_DIR}/include
-            ${XENOMAI_BASE_DIR}/include/cobalt
+        ${XENOMAI_BASE_DIR}/include
+        ${XENOMAI_BASE_DIR}/include/cobalt
     )
 
     find_library(COBALT_LIB cobalt HINTS ${XENOMAI_BASE_DIR}/lib)
