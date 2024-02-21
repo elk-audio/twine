@@ -142,8 +142,8 @@ endfunction()
 ####################
 
 set(SOURCE_FILES src/twine.cpp
-        src/thread_helpers_posix.cpp
-        src/apple_threading.cpp)
+                 src/thread_helpers_posix.cpp
+                 src/apple_threading.cpp)
 
 if (${TWINE_WITH_XENOMAI})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
