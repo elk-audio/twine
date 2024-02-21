@@ -23,6 +23,8 @@ pipelines:
           #- apt-get install -y software-properties-common
           #- add-apt-repository -y ppa:ubuntu-toolchain-r/test
           - cmake --version
+          # Rewrite the relative submodule url as bitbucket doesn't handle relative paths correctly
+          - sed -i 's/url = \.\.\(.*\)/url = git@bitbucket.org:'$BITBUCKET_TEAM'\1/g' .gitmodules
           - git submodule update --init --recursive
 
           # Set test data dir (for running unit test manually)
