@@ -3,4 +3,4 @@
     url = https://github.com/google/googletest.git
 [submodule "elk-warning-suppressor"]
 	path = elk-warning-suppressor
-	url = git@bitbucket.org:mindswteam/elk-warning-suppressor.git
+	url = ../elk-warning-suppressor.git
