@@ -3,12 +3,16 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <cstdint>
 #include <thread>
 #include <atomic>
 
+#ifdef TWINE_WINDOWS_THREADING
+#include "getopt_win.h"
+#else
 #include <getopt.h>
 #include <sys/mman.h>
-
+#endif
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #include "elk-warning-suppressor/warning_suppressor.hpp"
 
@@ -38,7 +42,7 @@ ELK_POP_WARNING
 
 constexpr int DEFAULT_INSTANCES = 4;
 constexpr int DEFAULT_ITERATIONS = 10000;
-constexpr auto INTERVAL = std::chrono::nanoseconds(2500000);
+constexpr auto INTERVAL = std::chrono::microseconds (2500);
 
 constexpr int NOTIFICATION_INTENSITY_MIN = 20;
 constexpr int NOTIFICATION_INTENSITY_MAX = 1;
