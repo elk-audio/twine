@@ -189,7 +189,11 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
         return std::make_unique<EvlConditionVariable>(id);
     }
 #endif
+#ifdef TWINE_WINDOWS_THREADING
     return std::make_unique<StdConditionVariable>();
+#else
+    return std::make_unique<PosixSemaphoreConditionVariable>();
+#endif
 }
 
 } // twine

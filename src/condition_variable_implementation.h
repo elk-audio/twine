@@ -26,6 +26,7 @@
 #include <cstdlib>
 #ifndef TWINE_WINDOWS_THREADING
 #include <semaphore.h>
+#include <fcntl.h>
 #endif
 #include "twine_internal.h"
 
