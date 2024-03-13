@@ -306,12 +306,12 @@ int main(int argc, char **argv)
     }
     run.store(false);
 
-    print_results(rt_counts, non_rt_counts);
 
     for (int i = 0; i < instances ; ++i)
     {
         cond_vars[i]->notify();
         non_rt_threads[i].join();
     }
+    print_results(rt_counts, non_rt_counts);
     return 0;
 }
