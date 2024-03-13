@@ -3,10 +3,5 @@
   "version-string": "0.4.0",
   "homepage" : "https://github.com/elk-audio/twine",
 
-  "dependencies": [
-    {
-      "name": "pthreads",
-      "platform": "windows"
-    }
-  ]
+  "dependencies": []
 }
