@@ -273,7 +273,7 @@ void print_results(const std::vector<uint64_t>& rt_counts,
     }
     auto mean_time = std::accumulate(exec_times.begin(), exec_times.end(), std::chrono::nanoseconds::zero()) / exec_times.size();
     auto max_time = *std::max_element(exec_times.begin(), exec_times.end());
-    std::cout << "Average notify time: " << mean_time.count() << "ns, maximum notify time: " << max_time.count() << "ns.";
+    std::cout << "Average notify time: " << mean_time.count() << "ns, maximum notify time: " << max_time.count() << "ns." << std::endl;
 }
 
 
