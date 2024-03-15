@@ -3,7 +3,10 @@
 #include "gtest/gtest.h"
 
 #include "twine.cpp"
+#ifndef TWINE_WINDOWS_THREADING
 #include "thread_helpers_posix.cpp"
+#endif
+
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #include "thread_helpers_xenomai.cpp"
 #endif

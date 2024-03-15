@@ -29,6 +29,10 @@ else()
     set(TWINE_WITH_APPLE_COREAUDIO_DEFAULT OFF)
 endif()
 
+if (MSVC)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DTWINE_WINDOWS_THREADING)
+endif()
+
 ########################
 #  Build Options       #
 ########################
@@ -120,13 +124,9 @@ endfunction()
 function(set_twine_target_properties target)
     target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
     target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
-    target_compile_features(${target} PUBLIC cxx_std_17)
+    target_compile_features(${target} PUBLIC cxx_std_20)
 
-    if(MSVC)
-        target_compile_features(${target} PUBLIC cxx_std_20)
-        find_package(PThreads4W REQUIRED)
-        set(PTHREAD_LIB PThreads4W::PThreads4W)
-    else()
+    if(NOT MSVC)
         target_compile_options(${target} PRIVATE -Wall -Wextra)
         set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
         set(PTHREAD_LIB pthread)
@@ -151,8 +151,11 @@ endfunction()
 ####################
 
 set(SOURCE_FILES src/twine.cpp
-                 src/thread_helpers_posix.cpp
                  src/apple_threading.cpp)
+
+if (NOT MSVC)
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_posix.cpp)
+endif()
 
 if (${TWINE_WITH_XENOMAI})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
@@ -169,7 +172,8 @@ endif()
 
 if(MSVC)
     # Define .def file to export dll symbols
-    set(TWINE_DEF_FILE twine.def)
+    set(TWINE_DEF_FILE twine.def
+            src/windows_threading.h)
 endif()
 
 add_library(twine_static STATIC ${SOURCE_FILES})

@@ -21,11 +21,15 @@
 #define TWINE_THREAD_HELPERS_H
 
 #include <cassert>
-
 #include <cstdint>
+
+#ifdef TWINE_WINDOWS_THREADING
+#include "windows_threading.h"
+#else
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#endif
 
 #ifdef TWINE_BUILD_WITH_EVL
     #include <evl/evl.h>
@@ -42,7 +46,6 @@ enum class ThreadType : uint32_t
     COBALT,
     EVL
 };
-
 
 // Empty base classes for the generic arguments of ThreadHelper
 
