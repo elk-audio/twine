@@ -60,7 +60,9 @@ thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
 static XenomaiRtFlag running_xenomai_realtime;
 
+#if ! defined(_MSC_VER) // On windows it's already defined
 #define _STRINGIZE(X) #X
+#endif
 #define STRINGIZE(X) _STRINGIZE(X)
 
 VersionInfo twine_version()
