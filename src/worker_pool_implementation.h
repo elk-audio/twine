@@ -73,7 +73,7 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
             return WorkerPoolStatus::INVALID_ARGUMENTS;
 
         default:
-            return WorkerPoolStatus::ERROR;
+            return WorkerPoolStatus::POOL_ERROR;
     }
 }
 
@@ -662,7 +662,7 @@ public:
 
                 _workers.pop_back();
 
-                return {WorkerPoolStatus::ERROR, status};
+                return {WorkerPoolStatus::POOL_ERROR, status};
             }
         }
         else
