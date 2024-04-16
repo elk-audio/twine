@@ -43,7 +43,7 @@ endif()
 
 add_executable(unit_tests ${TEST_FILES})
 
-target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS})
+target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS} TWINE_EXPOSE_INTERNALS)
 target_compile_options(unit_tests PRIVATE -Wall -Wextra)
 target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}" elk::warningSuppressor)
 target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
