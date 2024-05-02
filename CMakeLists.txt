@@ -132,7 +132,7 @@ function(set_twine_target_properties target)
         set(PTHREAD_LIB pthread)
     endif()
 
-    target_compile_definitions(${target} PUBLIC ${EXTRA_COMPILE_DEFINITIONS} PRIVATE TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS})
+    target_compile_definitions(${target} PUBLIC ${EXTRA_COMPILE_DEFINITIONS} PRIVATE TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS} TWINE_EXPOSE_INTERNALS)
     if (${TWINE_WITH_XENOMAI})
         add_xenomai_to_target(${target})
     endif()

@@ -259,6 +259,50 @@ protected:
     RtConditionVariable() = default;
 };
 
+/* To access the internal structures and function below, define TWINE_EXPOSE_INTERNALS before
+ * including this file. This is only necessary if you are writing an audio host or otherwise
+ * using Elk Audio OS without Sushi. If you are writing a plugin for Elk Audio OS there is
+ * no need to access them.
+ */
+#ifdef TWINE_EXPOSE_INTERNALS
+
+/**
+ * @brief Signal to twine that Worker Pools should use the xenomai thread api and
+ *        not the default std::thread implementation.
+ *        Must be called before creating any Worker Pools. Not indented to be called
+ *        from processors or plugins.
+ */
+void init_xenomai();
+
+/**
+ * @brief Used to signal that the current thread is a realtime thread.
+ *        Twine uses a thread-local counter to mark threads as realtime or not.
+ *        This should be set by the host at the beginning of every audio callback by
+ *        creating an instance of this class on the stack.
+ */
+class ThreadRtFlag
+{
+public:
+    ThreadRtFlag()
+    {
+        _instance_counter += 1;
+    }
+    ~ThreadRtFlag()
+    {
+        _instance_counter -= 1;
+    }
+
+    static bool is_realtime()
+    {
+        return _instance_counter > 0;
+    }
+
+private:
+    static thread_local int _instance_counter;
+};
+
+#endif
+
 }// namespace twine
 
 #endif // TWINE_TWINE_H_

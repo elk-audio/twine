@@ -46,7 +46,7 @@ endif()
 
 add_executable(unit_tests ${TEST_FILES})
 
-target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS})
+target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS} TWINE_EXPOSE_INTERNALS)
 
 if(NOT MSVC)
     target_compile_options(unit_tests PRIVATE -Wall -Wextra)
