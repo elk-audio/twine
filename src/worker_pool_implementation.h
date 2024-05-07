@@ -34,6 +34,7 @@
 #ifdef TWINE_BUILD_WITH_EVL
     #include <unistd.h>
     #include <evl/thread.h>
+    #include <evl/xbuf.h>
 #endif
 
 #include "apple_threading.h"

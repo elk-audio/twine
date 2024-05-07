@@ -37,6 +37,7 @@
     #include <cobalt/sys/socket.h>
 #elif TWINE_BUILD_WITH_EVL
     #include <evl/xbuf.h>
+    #include <evl/thread.h>
 #endif
 
 namespace twine {
