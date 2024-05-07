@@ -114,7 +114,6 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
     if (running_xenomai_realtime.is_set())
-	// TODO - add apple_data arguments - or maybe not?
     {
         return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
@@ -124,7 +123,7 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
         return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
 #endif
-#ifdef TWINE_APPLE_THREADING
+#ifndef TWINE_WINDOWS_THREADING
     return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, apple_data, disable_denormals, break_on_mode_sw);
 #else
     throw std::runtime_error("Worker pool not enabled for windows");
