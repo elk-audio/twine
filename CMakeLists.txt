@@ -12,7 +12,6 @@ project(twine
         VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
 )
 
-add_subdirectory(elk-warning-suppressor)
 
 ###########################
 #  Build and link options #
@@ -41,12 +40,19 @@ endif()
 option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
 option(TWINE_WITH_EVL "Build with EVL (Xenomai 4.x) realtime task support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
+option(TWINE_USE_INCLUDED_WARNING_SUPPRESSOR "If set to OFF, it will look for an installed Cmake package for warning suppressor" OFF)
 
 if (TWINE_WITH_XENOMAI AND TWINE_WITH_EVL)
     message(FATAL_ERROR "Both Xenomai and EVL options set, choose only one of them.")
 endif()
 
 SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+
+if (${TWINE_USE_INCLUDED_WARNING_SUPPRESSOR})
+    add_subdirectory(elk-warning-suppressor)
+else ()
+    find_package(elk-warning-suppressor 0.1.0)
+endif()
 
 ###################
 # CoreAudio setup #
