@@ -40,7 +40,7 @@ endif()
 option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
 option(TWINE_WITH_EVL "Build with EVL (Xenomai 4.x) realtime task support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
-option(TWINE_USE_INCLUDED_WARNING_SUPPRESSOR "If set to OFF, it will look for an installed Cmake package for warning suppressor" OFF)
+option(TWINE_USE_INCLUDED_WARNING_SUPPRESSOR "If set to OFF, it will look for an installed Cmake package for warning suppressor" ON)
 
 if (TWINE_WITH_XENOMAI AND TWINE_WITH_EVL)
     message(FATAL_ERROR "Both Xenomai and EVL options set, choose only one of them.")
@@ -51,8 +51,9 @@ SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultane
 if (${TWINE_USE_INCLUDED_WARNING_SUPPRESSOR})
     add_subdirectory(elk-warning-suppressor)
 else ()
-    find_package(elk-warning-suppressor 0.1.0)
+    find_package(elk-warning-suppressor 0.1.0 COMPONENTS warningSuppressor)
 endif()
+
 
 ###################
 # CoreAudio setup #
@@ -147,7 +148,9 @@ function(set_twine_target_properties target)
         target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
         set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
-    target_link_libraries(${target} PRIVATE ${PTHREAD_LIB} ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES} elk::warningSuppressor)
+    target_link_libraries(${target} PRIVATE ${PTHREAD_LIB} ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
+    target_link_libraries(${target} INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
+
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
     set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 endfunction()

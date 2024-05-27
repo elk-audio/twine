@@ -54,7 +54,8 @@ else()
     set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
  endif()
 
-target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}" elk::warningSuppressor)
+target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}")
+target_link_libraries(unit_tests INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
 target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 
 target_compile_features(unit_tests PRIVATE cxx_std_20)
