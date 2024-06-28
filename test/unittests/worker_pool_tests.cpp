@@ -27,9 +27,9 @@ using namespace twine;
 
 namespace
 {
-  constexpr int N_TEST_WORKERS = 4;
-  constexpr int TEST_AUDIO_CHUNK_SIZE = 64;
-  constexpr int TEST_SAMPLE_RATE = 48000;
+    constexpr int N_TEST_WORKERS = 4;
+    constexpr int TEST_AUDIO_CHUNK_SIZE = 64;
+    constexpr int TEST_SAMPLE_RATE = 48000;
 }
 
 void test_function(std::atomic_bool& running, std::atomic_bool& flag, BarrierWithTrigger<ThreadType::PTHREAD>(& barrier))

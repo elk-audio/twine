@@ -1,3 +1,11 @@
+## Next
+New Features:
+* Limited Windows support
+* C++20 support
+
+Breaking Changes:
+* Renamed WorkerPoolStatus::ERROR to WorkerPoolStatus::POOL_ERROR
+
 ## 0.4.0
 New Features:
 * Full EVL support including isolated cpus

@@ -12,7 +12,6 @@ project(twine
         VERSION ${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}.${TWINE_VERSION_REVISION}
 )
 
-add_subdirectory(elk-warning-suppressor)
 
 ###########################
 #  Build and link options #
@@ -29,6 +28,10 @@ else()
     set(TWINE_WITH_APPLE_COREAUDIO_DEFAULT OFF)
 endif()
 
+if (MSVC)
+    set(EXTRA_COMPILE_DEFINITIONS ${EXTRA_COMPILE_DEFINITIONS} -DTWINE_WINDOWS_THREADING)
+endif()
+
 ########################
 #  Build Options       #
 ########################
@@ -37,12 +40,20 @@ endif()
 option(TWINE_WITH_XENOMAI "Build with xenomai 3.0 Cobalt realtime thread support" OFF)
 option(TWINE_WITH_EVL "Build with EVL (Xenomai 4.x) realtime task support" OFF)
 option(TWINE_WITH_TESTS "Build and run unit tests" ON)
+option(TWINE_USE_INCLUDED_WARNING_SUPPRESSOR "If set to OFF, it will look for an installed Cmake package for warning suppressor" ON)
 
 if (TWINE_WITH_XENOMAI AND TWINE_WITH_EVL)
     message(FATAL_ERROR "Both Xenomai and EVL options set, choose only one of them.")
 endif()
 
 SET(TWINE_MAX_RT_CONDITION_VARS 32 CACHE STRING "The maximum number of simultaneous RtConditionVariables")
+
+if (${TWINE_USE_INCLUDED_WARNING_SUPPRESSOR})
+    add_subdirectory(elk-warning-suppressor)
+else ()
+    find_package(elk-warning-suppressor 0.1.0 COMPONENTS warningSuppressor)
+endif()
+
 
 ###################
 # CoreAudio setup #
@@ -120,9 +131,14 @@ endfunction()
 function(set_twine_target_properties target)
     target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/generated)
     target_include_directories(${target} PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
-    target_compile_features(${target} PUBLIC cxx_std_17)
-    target_compile_options(${target} PRIVATE -Wall -Wextra)
-    set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
+    target_compile_features(${target} PUBLIC cxx_std_20)
+
+    if(NOT MSVC)
+        target_compile_options(${target} PRIVATE -Wall -Wextra)
+        set_property(TARGET ${target} PROPERTY POSITION_INDEPENDENT_CODE 1)
+        set(PTHREAD_LIB pthread)
+    endif()
+
     target_compile_definitions(${target} PUBLIC ${EXTRA_COMPILE_DEFINITIONS} PRIVATE TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS} TWINE_EXPOSE_INTERNALS)
     if (${TWINE_WITH_XENOMAI})
         add_xenomai_to_target(${target})
@@ -132,7 +148,9 @@ function(set_twine_target_properties target)
         target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
         set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
-    target_link_libraries(${target} PRIVATE pthread ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES} elk::warningSuppressor)
+    target_link_libraries(${target} PRIVATE ${PTHREAD_LIB} ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
+    target_link_libraries(${target} INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
+
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
     set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
 endfunction()
@@ -142,8 +160,11 @@ endfunction()
 ####################
 
 set(SOURCE_FILES src/twine.cpp
-                 src/thread_helpers_posix.cpp
                  src/apple_threading.cpp)
+
+if (NOT MSVC)
+    set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_posix.cpp)
+endif()
 
 if (${TWINE_WITH_XENOMAI})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_cobalt.cpp)
@@ -158,11 +179,18 @@ endif()
 #   add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
 # but it doesn't play nicely with XCode builds, so we just define both
 
+if(MSVC)
+    # Define .def file to export dll symbols
+    set(TWINE_DEF_FILE twine.def
+            src/windows_threading.h)
+endif()
+
 add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)
-add_library(twine SHARED ${SOURCE_FILES})
+add_library(twine SHARED ${SOURCE_FILES} ${TWINE_DEF_FILE})
 set_twine_target_properties(twine)
 add_library(twine::twine ALIAS twine)
+add_library(twine::twine_static ALIAS twine_static)
 
 #######################
 #  Unit test targets  #

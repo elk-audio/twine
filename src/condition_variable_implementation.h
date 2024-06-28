@@ -16,6 +16,7 @@
 #define TWINE_CONDITION_VARIABLE_IMPLEMENTATION_H
 
 #include <algorithm>
+#include <array>
 #include <mutex>
 #include <string>
 #include <condition_variable>
@@ -23,9 +24,10 @@
 #include <cstring>
 #include <cassert>
 #include <cstdlib>
-
+#ifndef TWINE_WINDOWS_THREADING
 #include <semaphore.h>
-
+#include <fcntl.h>
+#endif
 #include "twine_internal.h"
 
 #ifdef TWINE_BUILD_WITH_XENOMAI
@@ -35,9 +37,45 @@
     #include <cobalt/sys/socket.h>
 #elif TWINE_BUILD_WITH_EVL
     #include <evl/xbuf.h>
+    #include <evl/thread.h>
 #endif
 
 namespace twine {
+
+/**
+ * @brief Implementation with regular c++ std library constructs for
+ *        use in a regular linux context.
+ */
+class StdConditionVariable : public RtConditionVariable
+{
+public:
+    ~StdConditionVariable() override = default;
+
+    void notify() override;
+
+    bool wait() override;
+
+private:
+    bool                    _flag{false};
+    std::mutex              _mutex;
+    std::condition_variable _cond_var;
+};
+
+void StdConditionVariable::notify()
+{
+    std::unique_lock<std::mutex> lock(_mutex);
+    _flag = true;
+    _cond_var.notify_one();
+}
+
+bool StdConditionVariable::wait()
+{
+    std::unique_lock<std::mutex> lock(_mutex);
+    _cond_var.wait(lock);
+    bool notified = _flag;
+    _flag = false;
+    return notified;
+}
 
 /**
  * @brief Implementation using posix semaphores for use in regular linux and MacOs
@@ -46,6 +84,7 @@ namespace twine {
 constexpr std::string_view COND_VAR_BASE_NAME = "/twine_cond_";
 constexpr int MAX_RETRIES = 100;
 
+#ifndef TWINE_WINDOWS_THREADING
 class PosixSemaphoreConditionVariable : public RtConditionVariable
 {
 public:
@@ -106,6 +145,7 @@ bool PosixSemaphoreConditionVariable::wait()
     sem_wait(_semaphore);
     return true;
 }
+#endif
 
 /* The maximum number of condition variable instances depend on the
  * number of rtp file descriptors enabled in the the xenomai kernel.

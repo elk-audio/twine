@@ -34,6 +34,7 @@
 #ifdef TWINE_BUILD_WITH_EVL
     #include <unistd.h>
     #include <evl/thread.h>
+    #include <evl/xbuf.h>
 #endif
 
 #include "apple_threading.h"
@@ -73,7 +74,7 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
             return WorkerPoolStatus::INVALID_ARGUMENTS;
 
         default:
-            return WorkerPoolStatus::ERROR;
+            return WorkerPoolStatus::POOL_ERROR;
     }
 }
 
@@ -412,11 +413,7 @@ public:
 
     ~WorkerThread()
     {
-        if (_thread_handle != 0)
-        {
-            _thread_helper->thread_join(_thread_handle, nullptr);
-        }
-
+        _thread_helper->thread_join(_thread_handle, nullptr);
         delete _thread_helper;
     }
 
@@ -437,7 +434,7 @@ public:
         pthread_attr_setschedpolicy(&task_attributes, SCHED_FIFO);
         pthread_attr_setschedparam(&task_attributes, &rt_params);
         auto res = 0;
-#ifndef __APPLE__
+#if !defined __APPLE__ && !defined TWINE_WINDOWS_THREADING
         cpu_set_t cpus;
         CPU_ZERO(&cpus);
         CPU_SET(cpu_id, &cpus);
@@ -666,7 +663,7 @@ public:
 
                 _workers.pop_back();
 
-                return {WorkerPoolStatus::ERROR, status};
+                return {WorkerPoolStatus::POOL_ERROR, status};
             }
         }
         else

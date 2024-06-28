@@ -12,8 +12,11 @@ set(CMAKE_EXE_LINKER_FLAGS "")
 set(TEST_COMPILE_DEFINITIONS)
 
 SET(TEST_FILES unittests/twine_tests.cpp
-               unittests/worker_pool_tests.cpp
                unittests/condition_variable_test.cpp)
+
+if(NOT MSVC)
+    set(TEST_FILES ${TEST_FILES} unittests/worker_pool_tests.cpp)
+endif()
 
 set(INCLUDE_DIRS ${INCLUDE_DIRS}
                  ${PROJECT_SOURCE_DIR}/include
@@ -44,13 +47,19 @@ endif()
 add_executable(unit_tests ${TEST_FILES})
 
 target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_MAX_RT_CONDITION_VARS=${TWINE_MAX_RT_CONDITION_VARS} TWINE_EXPOSE_INTERNALS)
-target_compile_options(unit_tests PRIVATE -Wall -Wextra)
-target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}" elk::warningSuppressor)
+
+if(NOT MSVC)
+    target_compile_options(unit_tests PRIVATE -Wall -Wextra)
+else()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
+ endif()
+
+target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}")
+target_link_libraries(unit_tests INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
 target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 
-target_compile_features(unit_tests PRIVATE cxx_std_17)
-# TODO - Line below not in apple branch
-target_compile_options(unit_tests PRIVATE -Wall -Wextra)
+target_compile_features(unit_tests PRIVATE cxx_std_20)
+
 if (${TWINE_WITH_XENOMAI})
     target_compile_definitions(unit_tests PRIVATE TWINE_BUILD_XENOMAI_TESTS)
     target_link_libraries(unit_tests PRIVATE ${COBALT_LIB})

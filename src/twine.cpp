@@ -17,6 +17,8 @@
  * @copyright 2017-2023 Elk Audio AB, Stockholm
  */
 
+#include <stdexcept>
+
 #ifdef __SSE__
     #include <xmmintrin.h>
     #define denormals_intrinsic() _mm_setcsr(0x9FC0)
@@ -45,8 +47,10 @@ ELK_POP_WARNING
 #include "twine/twine.h"
 #include "twine_internal.h"
 #include "twine_version.h"
-#include "worker_pool_implementation.h"
 #include "condition_variable_implementation.h"
+#ifndef TWINE_WINDOWS_THREADING
+    #include "worker_pool_implementation.h"
+#endif
 
 namespace twine {
 
@@ -56,7 +60,9 @@ thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
 static XenomaiRtFlag running_xenomai_realtime;
 
+#if ! defined(TWINE_WINDOWS_THREADING) // On Windows it's already defined
 #define _STRINGIZE(X) #X
+#endif
 #define STRINGIZE(X) _STRINGIZE(X)
 
 VersionInfo twine_version()
@@ -108,7 +114,6 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
 {
 #ifdef TWINE_BUILD_WITH_XENOMAI
     if (running_xenomai_realtime.is_set())
-	// TODO - add apple_data arguments - or maybe not?
     {
         return std::make_unique<WorkerPoolImpl<ThreadType::COBALT>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
@@ -118,7 +123,12 @@ std::unique_ptr<WorkerPool> WorkerPool::create_worker_pool(int cores,
         return std::make_unique<WorkerPoolImpl<ThreadType::EVL>>(cores, apple_data, disable_denormals, break_on_mode_sw);
     }
 #endif
+#ifndef TWINE_WINDOWS_THREADING
     return std::make_unique<WorkerPoolImpl<ThreadType::PTHREAD>>(cores, apple_data, disable_denormals, break_on_mode_sw);
+#else
+    throw std::runtime_error("Worker pool not enabled for windows");
+    return {};
+#endif
 }
 
 std::chrono::nanoseconds current_rt_time()
@@ -135,7 +145,7 @@ std::chrono::nanoseconds current_rt_time()
         return std::chrono::nanoseconds(tp.tv_nsec + tp.tv_sec * NS_TO_S);
 #else
         assert(false && "Xenomai realtime set without a RT build");
-        return std::chrono::nanoseconds(0);
+        return std::chrono::steady_clock::now().time_since_epoch();
 #endif
     }
     else
@@ -180,7 +190,11 @@ std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_va
         return std::make_unique<EvlConditionVariable>(id);
     }
 #endif
+#ifdef TWINE_WINDOWS_THREADING
+    return std::make_unique<StdConditionVariable>();
+#else
     return std::make_unique<PosixSemaphoreConditionVariable>();
+#endif
 }
 
 } // twine

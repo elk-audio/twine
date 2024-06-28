@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <thread>
+#include <numbers>
 
 #include <getopt.h>
 #include <sys/mman.h>
@@ -39,7 +40,7 @@ constexpr int DEFAULT_ITERATIONS = 10000;
 /* iir parameters: */
 constexpr float CUTOFF = 0.2f;
 constexpr float Q = 0.5f;
-constexpr float w0 = 2.0f * M_PI * CUTOFF;
+constexpr float w0 = 2.0f * std::numbers::pi_v<float> * CUTOFF;
 const float w0_cos = std::cos(w0);
 const float w0_sin = std::sin(w0);
 const float alpha = w0_sin / Q;

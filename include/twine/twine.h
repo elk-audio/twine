@@ -144,7 +144,7 @@ typedef void (*WorkerCallback)(void* data);
 enum class WorkerPoolStatus
 {
     OK,
-    ERROR,
+    POOL_ERROR,
     PERMISSION_DENIED,
     LIMIT_EXCEEDED,
     INVALID_ARGUMENTS

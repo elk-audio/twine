@@ -3,12 +3,17 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <cstdint>
 #include <thread>
 #include <atomic>
+#include <numeric>
 
+#ifdef TWINE_WINDOWS_THREADING
+#include "getopt_win.h"
+#else
 #include <getopt.h>
 #include <sys/mman.h>
-
+#endif
 #ifdef TWINE_BUILD_WITH_XENOMAI
 #include "elk-warning-suppressor/warning_suppressor.hpp"
 
@@ -38,7 +43,7 @@ ELK_POP_WARNING
 
 constexpr int DEFAULT_INSTANCES = 4;
 constexpr int DEFAULT_ITERATIONS = 10000;
-constexpr auto INTERVAL = std::chrono::nanoseconds(2500000);
+constexpr auto INTERVAL = std::chrono::microseconds (2500);
 
 constexpr int NOTIFICATION_INTENSITY_MIN = 20;
 constexpr int NOTIFICATION_INTENSITY_MAX = 1;
@@ -154,10 +159,11 @@ void print_iterations(int64_t iter, bool xenomai)
 
 void* run_stress_test(void* data)
 {
-    auto [cond_vars, frequencies, counts, iters, xenomai, print_timings] =
+    auto [cond_vars, frequencies, counts, exec_time, iters, xenomai, print_timings] =
                *(reinterpret_cast<std::tuple<std::vector<std::unique_ptr<twine::RtConditionVariable>>*,
                                   std::vector<int>*,
                                   std::vector<uint64_t>*,
+                                  std::vector<std::chrono::nanoseconds>*,
                                   int,
                                   bool,
                                   bool>*>(data));
@@ -175,7 +181,11 @@ void* run_stress_test(void* data)
             if (iter % frequencies->at(i) == 0)
             {
                 counts->at(i)++;
+                auto start = twine::current_rt_time();
+                std::atomic_thread_fence(std::memory_order_seq_cst);
                 cond_vars->at(i)->notify();
+                auto end = twine::current_rt_time();
+                exec_time->push_back(end - start);
             }
         }
         if (print_timings)
@@ -250,7 +260,9 @@ void run_stress_test_in_xenomai_thread([[maybe_unused]] void* data)
 #endif
 }
 
-void print_results(const std::vector<uint64_t>& rt_counts, const std::vector<uint64_t>& non_rt_counts)
+void print_results(const std::vector<uint64_t>& rt_counts,
+                   const std::vector<uint64_t>& non_rt_counts,
+                   const std::vector<std::chrono::nanoseconds>& exec_times)
 {
     std::cout << std::endl;
     for (int i = 0; i < static_cast<int>(rt_counts.size()); ++i)
@@ -259,6 +271,9 @@ void print_results(const std::vector<uint64_t>& rt_counts, const std::vector<uin
             << non_rt_counts[i] << " \t missed wakeups: "
             << static_cast<int64_t>(rt_counts[i]) -  static_cast<int64_t>(non_rt_counts[i]) << std::endl;
     }
+    auto mean_time = std::accumulate(exec_times.begin(), exec_times.end(), std::chrono::nanoseconds::zero()) / exec_times.size();
+    auto max_time = *std::max_element(exec_times.begin(), exec_times.end());
+    std::cout << "Average notify time: " << mean_time.count() << "ns, maximum notify time: " << max_time.count() << "ns." << std::endl;
 }
 
 
@@ -270,8 +285,11 @@ int main(int argc, char **argv)
     std::vector<uint64_t> rt_counts(instances, 0);
     std::vector<uint64_t> non_rt_counts(instances, 0);
     std::vector<int> frequencies;
+    std::vector<std::chrono::nanoseconds> exec_times;
     std::vector<std::unique_ptr<twine::RtConditionVariable>> cond_vars;
     std::atomic_bool run = true;
+
+    exec_times.reserve(instances * iters);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -291,7 +309,7 @@ int main(int argc, char **argv)
         /* Frequency should be interpreted as "notify that variable every nth interrupt" */
         frequencies.push_back(dist(gen));
     }
-    auto test_data = std::make_tuple(&cond_vars, &frequencies, &rt_counts, iters, xenomai, timings);
+    auto test_data = std::make_tuple(&cond_vars, &frequencies, &rt_counts, &exec_times, iters, xenomai, timings);
     if (xenomai)
     {
         run_stress_test_in_xenomai_thread(&test_data);
@@ -302,12 +320,11 @@ int main(int argc, char **argv)
     }
     run.store(false);
 
-    print_results(rt_counts, non_rt_counts);
-
     for (int i = 0; i < instances ; ++i)
     {
         cond_vars[i]->notify();
         non_rt_threads[i].join();
     }
+    print_results(rt_counts, non_rt_counts, exec_times);
     return 0;
 }
