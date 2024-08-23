@@ -363,7 +363,8 @@ void EvlConditionVariable::notify()
     }
     else
     {
-        write(_xbuf_to_rt, &data, sizeof(data));
+        //write(_xbuf_to_rt, &data, sizeof(data));
+        write(_xbuf_to_nonrt, &data, sizeof(data));
     }
 }
 
