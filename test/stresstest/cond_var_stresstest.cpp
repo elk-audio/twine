@@ -207,7 +207,7 @@ void* run_stress_test(void* data)
 #elif TWINE_BUILD_WITH_EVL
         if (xenomai)
         {
-            evl_usleep(INTERVAL.count() / 1000);
+            evl_usleep(INTERVAL.count());
         }
         else
 #endif
