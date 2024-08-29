@@ -11,8 +11,8 @@
 #include <evl/evl.h>
 #include <evl/syscall.h>
 
+#define TWINE_EXPOSE_INTERNALS 1
 #include "twine/twine.h"
-#include "twine_internal.h"
 
 constexpr int DEFAULT_NUM_ITERATIONS = 1000;
 static unsigned triggers = 0;

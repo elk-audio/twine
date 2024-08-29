@@ -24,8 +24,8 @@ ELK_POP_WARNING
     #include <evl/proxy.h>
 #endif
 
+#define TWINE_EXPOSE_INTERNALS 1
 #include "twine/twine.h"
-#include "twine_internal.h"
 
 /*
  * Tool for stress testing WorkerPool implementations with
