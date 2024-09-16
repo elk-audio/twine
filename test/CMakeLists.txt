@@ -1,4 +1,8 @@
 # build gtest framework
+if (MSVC)
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
+
 add_subdirectory(gtest EXCLUDE_FROM_ALL)
 enable_testing()
 
@@ -50,9 +54,7 @@ target_compile_definitions(unit_tests PRIVATE ${TEST_COMPILE_DEFINITIONS} TWINE_
 
 if(NOT MSVC)
     target_compile_options(unit_tests PRIVATE -Wall -Wextra)
-else()
-    set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
- endif()
+endif()
 
 target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}")
 target_link_libraries(unit_tests INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
