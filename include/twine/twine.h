@@ -265,8 +265,11 @@ protected:
  * no need to access them.
  */
 #ifdef TWINE_EXPOSE_INTERNALS
+
 #ifdef TWINE_WINDOWS_THREADING
-#define TWINE_EXPORT __declspec(dllexport)
+    #define TWINE_EXPORT __declspec(dllexport)
+#else
+    #define TWINE_EXPORT
 #endif
 
 /**
