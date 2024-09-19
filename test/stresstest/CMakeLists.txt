@@ -32,6 +32,12 @@ if (${TWINE_WITH_XENOMAI})
     add_xenomai_to_target(condition_variable_stress_test)
 endif()
 
+### Custom command to copy twine.dll to the binary folder after build
+if (MSVC)
+    add_custom_command(TARGET condition_variable_stress_test POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:condition_variable_stress_test> $<TARGET_FILE_DIR:condition_variable_stress_test>
+            COMMAND_EXPAND_LISTS)
+endif()
 
 if (${TWINE_WITH_EVL})
     add_executable(cond_var_full_duplex_test cond_var_full_duplex_test.cpp)
