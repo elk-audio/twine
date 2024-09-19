@@ -56,7 +56,6 @@ namespace twine {
 
 [[maybe_unused]] constexpr int64_t NS_TO_S = 1'000'000'000;
 
-thread_local int ThreadRtFlag::_instance_counter = 0;
 bool XenomaiRtFlag::_enabled = false;
 static XenomaiRtFlag running_xenomai_realtime;
 
@@ -172,6 +171,22 @@ std::string to_error_string(twine::WorkerPoolStatus status)
         default:
             return "Error";
     }
+}
+
+thread_local int ThreadRtFlag::_instance_counter = 0;
+
+ThreadRtFlag::ThreadRtFlag()
+{
+    _instance_counter += 1;
+}
+ThreadRtFlag::~ThreadRtFlag()
+{
+    _instance_counter -= 1;
+}
+
+inline bool ThreadRtFlag::is_realtime()
+{
+    return _instance_counter > 0;
 }
 
 std::unique_ptr<RtConditionVariable> RtConditionVariable::create_rt_condition_variable()
