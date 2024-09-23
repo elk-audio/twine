@@ -413,7 +413,10 @@ public:
 
     ~WorkerThread()
     {
-        _thread_helper->thread_join(_thread_handle, nullptr);
+        if (_thread_handle)
+        {
+            _thread_helper->thread_join(_thread_handle, nullptr);
+        }
         delete _thread_helper;
     }
 
