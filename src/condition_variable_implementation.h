@@ -21,12 +21,14 @@
 #include <string>
 #include <condition_variable>
 #include <exception>
+#include <atomic>
 #include <cstring>
 #include <cassert>
 #include <cstdlib>
 #ifndef TWINE_WINDOWS_THREADING
 #include <semaphore.h>
 #include <fcntl.h>
+#include <poll.h>
 #endif
 #include "twine_internal.h"
 
@@ -313,6 +315,8 @@ using MsgType = uint8_t;
 constexpr size_t XBUF_SIZE = 1024;
 constexpr int INFINITE_POLL_TIME = -1;
 
+constexpr auto EVL_COND_VAR_WAIT_TIMEOUT = std::chrono::milliseconds(2000);
+
 /**
  * @brief Implementation using EVL xbuf mechanisms
  */
@@ -328,9 +332,10 @@ public:
     bool wait() override;
 
 private:
-    int _xbuf_to_rt{0};
-    int _xbuf_to_nonrt{0};
-    int          _id{0};
+    int  _xbuf_to_rt{0};
+    int  _xbuf_to_nonrt{0};
+    int  _id{0};
+    std::atomic_bool _should_quit{false};
 };
 
 EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
@@ -350,6 +355,7 @@ EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
 
 EvlConditionVariable::~EvlConditionVariable()
 {
+    _should_quit.store(true, std::memory_order_release);
     close(_xbuf_to_rt);
     close(_xbuf_to_nonrt);
 }
@@ -363,8 +369,7 @@ void EvlConditionVariable::notify()
     }
     else
     {
-        //write(_xbuf_to_rt, &data, sizeof(data));
-        write(_xbuf_to_nonrt, &data, sizeof(data));
+        write(_xbuf_to_rt, &data, sizeof(data));
     }
 }
 
@@ -379,7 +384,19 @@ bool EvlConditionVariable::wait()
     }
     else
     {
-        len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
+        while (!_should_quit.load(std::memory_order_acquire))
+        {
+            /* A read() call on an evl xbuf is blocking and won't unblock even if the fd is closed.
+             * Hence we need to poll the fd order to be able to unblock threads waiting in wait() */
+            pollfd fd = {.fd = _xbuf_to_nonrt, .events = POLLIN, .revents = 0} ;
+
+            int res = poll(&fd, 1, EVL_COND_VAR_WAIT_TIMEOUT.count());
+            if (res > 0 && fd.revents | POLLIN)
+            {
+                len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
+                break;
+            }
+        }
     }
     return len > 0;
 }

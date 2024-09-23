@@ -320,11 +320,19 @@ int main(int argc, char **argv)
     }
     run.store(false);
 
+    print_results(rt_counts, non_rt_counts, exec_times);
+
+    for (auto& var : cond_vars)
+    {
+        /* For EvlConditionVariables, we can't call notify() from a posix thread, it must be called from an
+         * EVL thread. Though deleting the condition variable will unblock any thread waiting on wait() */
+        var.reset();
+    }
+    
     for (int i = 0; i < instances ; ++i)
     {
-        cond_vars[i]->notify();
         non_rt_threads[i].join();
     }
-    print_results(rt_counts, non_rt_counts, exec_times);
+
     return 0;
 }
