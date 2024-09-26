@@ -328,7 +328,7 @@ int main(int argc, char **argv)
          * EVL thread. Though deleting the condition variable will unblock any thread waiting on wait() */
         var.reset();
     }
-    
+
     for (int i = 0; i < instances ; ++i)
     {
         non_rt_threads[i].join();

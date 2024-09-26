@@ -313,9 +313,9 @@ void XenomaiConditionVariable::_set_up_files()
 
 using MsgType = uint8_t;
 constexpr size_t XBUF_SIZE = 1024;
-constexpr int INFINITE_POLL_TIME = -1;
 
-constexpr auto EVL_COND_VAR_WAIT_TIMEOUT = std::chrono::milliseconds(2000);
+constexpr auto EVL_COND_VAR_WAIT_TIMEOUT = std::chrono::milliseconds(1000);
+constexpr int  EVL_SHUTDOWN_RETRIES = 10;
 
 /**
  * @brief Implementation using EVL xbuf mechanisms
@@ -335,7 +335,7 @@ private:
     int  _xbuf_to_rt{0};
     int  _xbuf_to_nonrt{0};
     int  _id{0};
-    std::atomic_bool _should_quit{false};
+    std::atomic_bool _is_waiting{false};
 };
 
 EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
@@ -355,9 +355,15 @@ EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
 
 EvlConditionVariable::~EvlConditionVariable()
 {
-    _should_quit.store(true, std::memory_order_release);
     close(_xbuf_to_rt);
     close(_xbuf_to_nonrt);
+    int retries = EVL_SHUTDOWN_RETRIES;
+    while (_is_waiting && retries > 0)
+    {
+        retries--;
+        std::this_thread::sleep_for(EVL_COND_VAR_WAIT_TIMEOUT / (EVL_SHUTDOWN_RETRIES / 2));
+    }
+
 }
 
 void EvlConditionVariable::notify()
@@ -377,6 +383,7 @@ bool EvlConditionVariable::wait()
 {
     MsgType buffer;
     int len = 0;
+    _is_waiting.store(true, std::memory_order_acquire);
 
     if (!evl_is_inband())
     {
@@ -384,20 +391,27 @@ bool EvlConditionVariable::wait()
     }
     else
     {
-        while (!_should_quit.load(std::memory_order_acquire))
+        while (true)
         {
-            /* A read() call on an evl xbuf is blocking and won't unblock even if the fd is closed.
+            /* A read() call on an evl xbuf is blocking and won't unblock even if the xbuf fd is closed.
              * Hence we need to poll the fd order to be able to unblock threads waiting in wait() */
             pollfd fd = {.fd = _xbuf_to_nonrt, .events = POLLIN, .revents = 0} ;
-
             int res = poll(&fd, 1, EVL_COND_VAR_WAIT_TIMEOUT.count());
-            if (res > 0 && fd.revents | POLLIN)
+
+            if (res > 0 && fd.revents | POLLIN) // There was data to be read
             {
                 len += read(_xbuf_to_nonrt, &buffer, sizeof(buffer));
                 break;
             }
+            else if (fd.revents | (POLLERR | POLLHUP | POLLNVAL)) // File descriptor closed or has errors, most likely because we're shutting down
+            {
+                len = 0;
+                break;
+            }
+            // Else we timed out w/o errors, poll again.
         }
     }
+    _is_waiting.store(false, std::memory_order_release);
     return len > 0;
 }
 
