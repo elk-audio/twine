@@ -313,6 +313,8 @@ void XenomaiConditionVariable::_set_up_files()
 
 using MsgType = uint8_t;
 constexpr size_t XBUF_SIZE = 1024;
+// since std::hardware_destructive_interference_size is not yet supported in GCC 11
+constexpr int ASSUMED_CACHE_LINE_SIZE = 64;
 
 constexpr auto EVL_COND_VAR_WAIT_TIMEOUT = std::chrono::milliseconds(1000);
 constexpr int  EVL_SHUTDOWN_RETRIES = 10;
@@ -335,7 +337,7 @@ private:
     int  _xbuf_to_rt{0};
     int  _xbuf_to_nonrt{0};
     int  _id{0};
-    std::atomic_bool _is_waiting{false};
+    alignas(ASSUMED_CACHE_LINE_SIZE) std::atomic_bool _is_waiting{false};
 };
 
 EvlConditionVariable::EvlConditionVariable(int id) : _id(id)
