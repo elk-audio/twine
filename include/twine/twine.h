@@ -266,6 +266,12 @@ protected:
  */
 #ifdef TWINE_EXPOSE_INTERNALS
 
+#ifdef TWINE_WINDOWS_THREADING
+    #define TWINE_EXPORT __declspec(dllexport)
+#else
+    #define TWINE_EXPORT
+#endif
+
 /**
  * @brief Signal to twine that Worker Pools should use the xenomai thread api and
  *        not the default std::thread implementation.
@@ -283,19 +289,11 @@ void init_xenomai();
 class ThreadRtFlag
 {
 public:
-    ThreadRtFlag()
-    {
-        _instance_counter += 1;
-    }
-    ~ThreadRtFlag()
-    {
-        _instance_counter -= 1;
-    }
+    TWINE_EXPORT ThreadRtFlag();
 
-    static bool is_realtime()
-    {
-        return _instance_counter > 0;
-    }
+    TWINE_EXPORT ~ThreadRtFlag();
+
+    static bool is_realtime();
 
 private:
     static thread_local int _instance_counter;
