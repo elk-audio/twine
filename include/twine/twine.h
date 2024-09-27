@@ -13,8 +13,8 @@
  */
 
 /**
- * @brief Twine library API definition
- * @copyright 2017-2023 Elk Audio AB, Stockholm
+ * @brief Twine library API definitions
+ * @copyright 2017-2024 Elk Audio AB, Stockholm
  */
 
 #ifndef TWINE_TWINE_H_
@@ -99,7 +99,7 @@ typedef std::function<void(apple::AppleThreadingStatus)> WorkerErrorCallback;
 
 }
 
-#endif // __APPLE__
+#endif // TWINE_APPLE_THREADING
 
 namespace twine {
 
@@ -161,6 +161,9 @@ enum class WorkerPoolStatus
  */
 std::chrono::nanoseconds current_rt_time();
 
+/**
+ * @brief Worker Pool for running multiple realtime threads in parallel
+ */
 class WorkerPool
 {
 public:

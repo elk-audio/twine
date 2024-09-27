@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 
 # Set twine library version - Don't change anywhere else. Everything is generated from this.
-set(TWINE_VERSION_MAJOR 0)
-set(TWINE_VERSION_MINOR 4)
+set(TWINE_VERSION_MAJOR 1)
+set(TWINE_VERSION_MINOR 0)
 set(TWINE_VERSION_REVISION 0)
 
 project(twine
@@ -176,7 +176,7 @@ endif()
 
 # The best way to build both static & dynamic targets
 # would have been to reuse the existing objects as in:
-#   add_library(twine SHARED $<TARGET_OBJECTS:twine_objlib>)
+#   add_library(twine SHARED $<TARGET_OBJECTS:twine_static>)
 # but it doesn't play nicely with XCode builds, so we just define both
 
 if(MSVC)

@@ -1,11 +1,17 @@
-## Next
+## 1.0.0
 New Features:
-* Limited Windows support
+* Windows support (does not include WorkerPool)
 * C++20 support
 
 Breaking Changes:
 * Renamed WorkerPoolStatus::ERROR to WorkerPoolStatus::POOL_ERROR
+* ThreadRtFlag is now accessed by defining TWINE_EXPOSE_INTERNALS instead of including twine_internal.h
 
+Fixes:
+* ThreadRtFlag refactor
+* Stress test timing fix for EVL
+* EVL implementation of RtConditionVariable should now always unblock on destruction
+ 
 ## 0.4.0
 New Features:
 * Full EVL support including isolated cpus
