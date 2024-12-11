@@ -161,6 +161,12 @@ enum class WorkerPoolStatus
  */
 std::chrono::nanoseconds current_rt_time();
 
+struct CpuInfo
+{
+    int id;
+    int workers;
+};
+
 /**
  * @brief Worker Pool for running multiple realtime threads in parallel
  */
@@ -221,6 +227,11 @@ public:
      *        single atomic operation.
      */
     virtual void wakeup_and_wait() = 0;
+
+    /**
+     * @brief Get a list of Cpu cores used by twine with their ids and the number of workers assigned to them
+     */
+    [[nodiscard]] virtual std::vector<CpuInfo> core_info() const = 0;
 
 protected:
     WorkerPool() = default;
