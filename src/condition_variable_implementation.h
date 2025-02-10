@@ -385,7 +385,7 @@ bool EvlConditionVariable::wait()
 {
     MsgType buffer;
     int len = 0;
-    _is_waiting.store(true, std::memory_order_acquire);
+    _is_waiting.store(true, std::memory_order_seq_cst);
 
     if (!evl_is_inband())
     {
