@@ -148,8 +148,7 @@ function(set_twine_target_properties target)
         target_compile_definitions(${target} PUBLIC TWINE_BUILD_WITH_EVL)
         set(TWINE_LINK_LIBRARIES ${TWINE_LINK_LIBRARIES} evl)
     endif()
-    target_link_libraries(${target} PRIVATE ${PTHREAD_LIB} ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES})
-    target_link_libraries(${target} INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
+    target_link_libraries(${target} PRIVATE ${PTHREAD_LIB} ${TWINE_LINK_LIBRARIES} ${EXTRA_BUILD_LIBRARIES} elk::warningSuppressor)
 
     set_target_properties(${target} PROPERTIES VERSION "${TWINE_VERSION_MAJOR}.${TWINE_VERSION_MINOR}")
     set_target_properties(${target} PROPERTIES PUBLIC_HEADER include/twine/twine.h)
@@ -174,16 +173,16 @@ if (${TWINE_WITH_EVL})
     set(SOURCE_FILES "${SOURCE_FILES}" src/thread_helpers_evl.cpp)
 endif()
 
-# The best way to build both static & dynamic targets
-# would have been to reuse the existing objects as in:
-#   add_library(twine SHARED $<TARGET_OBJECTS:twine_static>)
-# but it doesn't play nicely with XCode builds, so we just define both
-
 if(MSVC)
     # Define .def file to export dll symbols
     set(TWINE_DEF_FILE twine.def
             src/windows_threading.h)
 endif()
+
+# The best way to build both static & dynamic targets
+# would have been to reuse the existing objects as in:
+#   add_library(twine SHARED $<TARGET_OBJECTS:twine_static>)
+# but it doesn't play nicely with XCode builds, so we just define both
 
 add_library(twine_static STATIC ${SOURCE_FILES})
 set_twine_target_properties(twine_static)

@@ -34,6 +34,7 @@ set(TEST_LINK_LIBRARIES
         gmock
         gmock_main
         twine)
+
 ## TODO - test should not link with twine (this pulls in evl/xenomai)
 
 # Unit tests are build without xenomai/evl regardless
@@ -56,8 +57,7 @@ if(NOT MSVC)
     target_compile_options(unit_tests PRIVATE -Wall -Wextra)
 endif()
 
-target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}")
-target_link_libraries(unit_tests INTERFACE $<BUILD_INTERFACE:elk::warningSuppressor>)
+target_link_libraries(unit_tests PRIVATE "${TEST_LINK_LIBRARIES}" elk::warningSuppressor)
 target_include_directories(unit_tests PRIVATE ${INCLUDE_DIRS})
 
 target_compile_features(unit_tests PRIVATE cxx_std_20)
