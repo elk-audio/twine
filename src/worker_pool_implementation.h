@@ -51,12 +51,6 @@ class WorkerPoolImpl;
 
 void set_flush_denormals_to_zero();
 
-struct CoreInfo
-{
-    int id;
-    int workers;
-};
-
 inline WorkerPoolStatus errno_to_worker_status(int error)
 {
     switch (error)
@@ -78,9 +72,9 @@ inline WorkerPoolStatus errno_to_worker_status(int error)
     }
 }
 
-inline std::vector<CoreInfo> build_core_list(int start_core, int cores)
+inline std::vector<CpuInfo> build_core_list(int start_core, int cores)
 {
-    std::vector<CoreInfo> list;
+    std::vector<CpuInfo> list;
     for (int i = start_core; i < cores + start_core; i++)
     {
         list.push_back({i, 0});
@@ -115,14 +109,14 @@ inline std::vector<int> read_isolated_cores(const std::string& str)
 }
 
 /**
- * @brief Read the isolated cpus from a file path and populates a vector of CoreInfo objects from it
+ * @brief Read the isolated cpus from a file path and populates a vector of CpuInfo objects from it
  * @param cpu_file The file to read cpu data from
  * @param cores The maximum number of cores to use. If that is less than the number of isolated cpu cores
  *              only the first cores will be used
- * @return A std::vector<CoreInfo> with the core ids from the file or std::nullopt if the file is empty
+ * @return A std::vector<CpuInfo> with the core ids from the file or std::nullopt if the file is empty
  *         or non-existent
  */
-inline std::optional<std::vector<CoreInfo>> get_isolated_cpus(const std::string& cpu_file, int cores)
+inline std::optional<std::vector<CpuInfo>> get_isolated_cpus(const std::string& cpu_file, int cores)
 {
     std::fstream file;
     file.open(cpu_file.c_str(), std::ios_base::in);
@@ -133,7 +127,7 @@ inline std::optional<std::vector<CoreInfo>> get_isolated_cpus(const std::string&
         auto info = read_isolated_cores(contents);
         if (info.size() > 0)
         {
-            std::vector<CoreInfo> list;
+            std::vector<CpuInfo> list;
             for (int i = 0; i < std::min(static_cast<int>(info.size()), cores); ++i)
             {
                 list.push_back({info.at(i), 0});
@@ -612,7 +606,7 @@ public:
                                                                         int sched_priority = DEFAULT_SCHED_PRIORITY,
                                                                         std::optional<int> cpu_id = std::nullopt) override
     {
-        std::vector<CoreInfo>::iterator core_info;
+        std::vector<CpuInfo>::iterator core_info;
         if (cpu_id.has_value())
         {
             auto core = std::find_if(_cores.begin(), _cores.end(), [&](auto& i){return i.id == cpu_id.value();});
@@ -692,10 +686,15 @@ public:
         _barrier.release_and_wait();
     }
 
+    std::vector<CpuInfo> core_info() const override
+    {
+        return _cores;
+    }
+
 private:
     std::atomic_bool            _running{true};
     int                         _no_workers{0};
-    std::vector<CoreInfo>       _cores;
+    std::vector<CpuInfo>        _cores;
     bool                        _disable_denormals;
     bool                        _break_on_mode_sw;
     BarrierWithTrigger<type>    _barrier;
