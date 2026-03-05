@@ -1,3 +1,7 @@
+## 1.1.0
+New Features:
+* Support for querying current CPU core for all workers
+
 ## 1.0.0
 New Features:
 * Windows support (does not include WorkerPool)
